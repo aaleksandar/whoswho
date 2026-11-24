@@ -81,7 +81,7 @@ export function publicGuest(g) {
   return rest;
 }
 
-export function openDb(file = process.env.DB_PATH || 'abu.sqlite') {
+export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;');
 

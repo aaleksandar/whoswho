@@ -114,18 +114,18 @@ test('every animal renders with every glasses and hat', () => {
 });
 
 test('loadEnvFile fills process.env from a file without overriding the shell', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'abu-env-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'whoswho-env-'));
   const file = path.join(dir, '.env');
-  fs.writeFileSync(file, 'ABU_TEST_FROM_FILE="file"\nABU_TEST_SHELL_WINS=file\n');
-  process.env.ABU_TEST_SHELL_WINS = 'shell';
+  fs.writeFileSync(file, 'WHOSWHO_TEST_FROM_FILE="file"\nABU_TEST_SHELL_WINS=file\n');
+  process.env.WHOSWHO_TEST_SHELL_WINS = 'shell';
   try {
     assert.equal(loadEnvFile(file), true);
-    assert.equal(process.env.ABU_TEST_FROM_FILE, 'file');
-    assert.equal(process.env.ABU_TEST_SHELL_WINS, 'shell');
+    assert.equal(process.env.WHOSWHO_TEST_FROM_FILE, 'file');
+    assert.equal(process.env.WHOSWHO_TEST_SHELL_WINS, 'shell');
     assert.equal(loadEnvFile(path.join(dir, 'missing')), false);
   } finally {
-    delete process.env.ABU_TEST_FROM_FILE;
-    delete process.env.ABU_TEST_SHELL_WINS;
+    delete process.env.WHOSWHO_TEST_FROM_FILE;
+    delete process.env.WHOSWHO_TEST_SHELL_WINS;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });

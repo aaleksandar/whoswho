@@ -1,4 +1,4 @@
-// abu — local-network guest board.
+// whoswho — local-network guest board.
 //   /home   rotating display (graph · map · needs) with a QR code to /hi
 //   /hi     guest registration
 //   /hax0r  admin
@@ -175,7 +175,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const server = app.listen(PORT, '0.0.0.0', () => {
     const host = lanHost();
     const b = `http://${host}:${PORT}`;
-    console.log(`\n  abu is up — open these from any device on your network:\n`);
+    console.log(`\n  whoswho is up — open these from any device on your network:\n`);
     console.log(`    Display   ${b}/home`);
     console.log(`    Register  ${b}/hi`);
     console.log(`    Admin     ${b}/hax0r${process.env.ADMIN_PASSWORD ? '  (password protected)' : ''}\n`);

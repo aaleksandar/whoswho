@@ -14,7 +14,7 @@ export function adminAuth(password = process.env.ADMIN_PASSWORD) {
       const pass = decoded.slice(decoded.indexOf(':') + 1);
       if (timingSafeEqual(digest(pass), expected)) return next();
     }
-    res.set('WWW-Authenticate', 'Basic realm="abu admin", charset="UTF-8"');
+    res.set('WWW-Authenticate', 'Basic realm="whoswho admin", charset="UTF-8"');
     res.status(401).json({ error: 'Admin password required' });
   };
 }

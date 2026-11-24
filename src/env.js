@@ -1,4 +1,4 @@
-// Loads abu's own .env (project root, git-ignored; see .env.example) into
+// Loads whoswho's own .env (project root, git-ignored; see .env.example) into
 // process.env. Variables already set in the shell win over the file.
 
 import path from 'node:path';

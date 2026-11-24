@@ -1,5 +1,5 @@
 {
-  "name": "abu",
+  "name": "whoswho",
   "version": "1.0.0",
   "description": "Local-network guest board: connection graph, map and needs views with QR registration",
   "type": "module",

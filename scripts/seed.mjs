@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Adds sample guests for demos/testing.  npm run seed [-- --clear] [-- --count N]
-// Writes straight to the DB file (DB_PATH from the env or .env, else ./abu.sqlite). A running server
+// Writes straight to the DB file (DB_PATH from the env or .env, else ./whoswho.sqlite). A running server
 // picks the new guests up on its next request; refresh /home to see them.
 
 import { openDb } from '../src/db.js';

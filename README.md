@@ -1,4 +1,4 @@
-# abu: who's here?
+# whoswho: who's here?
 
 A guest board for parties and meetups, hosted on your laptop and reachable from every device on the local network.
 
@@ -33,12 +33,12 @@ Want something to look at first? `npm run seed` adds 20 sample guests (`npm run 
 
 Settings come from environment variables, or from a `.env` file in the project folder. Copy `.env.example` to `.env` and fill it in. `.env` is git-ignored, and anything already set in your shell wins over it.
 
-| Env var          | Default        | Purpose                                                                                      |
-|------------------|----------------|----------------------------------------------------------------------------------------------|
-| `PORT`           | `3000`         | Port to listen on (all interfaces)                                                           |
-| `DB_PATH`        | `./abu.sqlite` | SQLite database file                                                                         |
-| `ADMIN_PASSWORD` | *(unset)*      | Puts `/hax0r` and the admin API behind HTTP Basic auth (any username)                        |
-| `PUBLIC_HOST`    | *(auto)*       | Overrides the auto-detected LAN IP used in the QR code (e.g. if a VPN interface gets picked) |
+| Env var          | Default            | Purpose                                                                                      |
+|------------------|--------------------|----------------------------------------------------------------------------------------------|
+| `PORT`           | `3000`             | Port to listen on (all interfaces)                                                           |
+| `DB_PATH`        | `./whoswho.sqlite` | SQLite database file                                                                         |
+| `ADMIN_PASSWORD` | *(unset)*          | Puts `/hax0r` and the admin API behind HTTP Basic auth (any username)                        |
+| `PUBLIC_HOST`    | *(auto)*           | Overrides the auto-detected LAN IP used in the QR code (e.g. if a VPN interface gets picked) |
 
 Set the event title, the seconds each view stays on screen, and which views are in rotation from `/hax0r`. Changes apply to the display live.
 
