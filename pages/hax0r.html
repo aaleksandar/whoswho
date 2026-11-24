@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hax0r · admin</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/form.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+  <header class="ad-head">
+    <h1>hax0r<span class="blink">_</span></h1>
+    <nav class="ad-links">
+      <a href="/home" target="_blank">Display ↗</a>
+      <a href="/hi" target="_blank">Register ↗</a>
+    </nav>
+  </header>
+
+  <main class="ad-main">
+    <section class="ad-card ad-guests">
+      <div class="ad-card-head">
+        <h2>Guests <span class="ad-pill" id="guest-count">0</span></h2>
+        <input type="search" id="filter" placeholder="Filter by name, vibe, need, postcode…" aria-label="Filter guests">
+      </div>
+      <div class="ad-table-wrap">
+        <table class="ad-table">
+          <thead><tr><th></th><th>Name</th><th>Vibes</th><th>Need</th><th>Location</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="guest-rows"></tbody>
+        </table>
+        <p class="ad-empty" id="empty" hidden>No guests yet. Share the QR on the display!</p>
+      </div>
+    </section>
+
+    <div class="ad-side">
+      <section class="ad-card">
+        <h2>Display settings</h2>
+        <form id="settings-form" class="ad-form">
+          <label>Event title <input type="text" name="title" maxlength="60"></label>
+          <label>Seconds per view <input type="number" name="rotateSeconds" min="3" max="600" step="1"></label>
+          <fieldset>
+            <legend>Views in rotation</legend>
+            <label class="ad-check"><input type="checkbox" name="views" value="graph"> Connections</label>
+            <label class="ad-check"><input type="checkbox" name="views" value="map"> Map</label>
+            <label class="ad-check"><input type="checkbox" name="views" value="needs"> Needs</label>
+          </fieldset>
+          <div class="ad-form-foot"><button type="submit" class="ad-btn primary">Save</button><span class="ad-status" id="settings-status" role="status"></span></div>
+        </form>
+      </section>
+
+      <section class="ad-card">
+        <h2>Network</h2>
+        <dl class="ad-urls" id="urls"></dl>
+        <img class="ad-qr" src="/api/qr.svg" alt="QR code to the registration page">
+      </section>
+
+      <section class="ad-card ad-danger">
+        <h2>Reset event</h2>
+        <p>Deletes <b>every</b> guest. Type <code>DELETE</code> to confirm.</p>
+        <form id="reset-form" class="ad-reset">
+          <input type="text" name="confirm" autocomplete="off" placeholder="DELETE" aria-label="Type DELETE to confirm">
+          <button type="submit" class="ad-btn danger">Delete everyone</button>
+        </form>
+        <span class="ad-status" id="reset-status" role="status"></span>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="edit-dialog" class="ad-dialog">
+    <h2 id="edit-title">Edit guest</h2>
+    <div id="edit-body"></div>
+  </dialog>
+
+  <script type="module" src="/js/hax0r.js"></script>
+</body>
+</html>

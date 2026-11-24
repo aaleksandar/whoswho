@@ -1,0 +1,350 @@
+body.admin {
+  min-height: 100vh;
+  background: #0f0d14;
+  color: #e8e4f0;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --term: #39ff88;
+}
+
+.ad-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  border-bottom: 1px solid #262033;
+}
+.ad-head h1 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 1.6rem;
+  color: var(--term);
+  text-shadow: 0 0 12px rgba(57, 255, 136, 0.45);
+}
+.blink {
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.ad-links {
+  display: flex;
+  gap: 18px;
+}
+.ad-links a,
+.ad-urls a {
+  color: #b9a8ff;
+  font-weight: 700;
+  text-decoration: none;
+}
+.ad-links a:hover,
+.ad-urls a:hover {
+  text-decoration: underline;
+}
+
+.ad-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 22px;
+  padding: 22px 28px 40px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .ad-main {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+}
+.ad-side {
+  display: grid;
+  gap: 22px;
+}
+
+.ad-card {
+  background: #18141f;
+  border: 1px solid #262033;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+.ad-card h2 {
+  margin: 0 0 14px;
+  font-family: var(--mono);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cfc8dc;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ad-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.ad-card-head h2 {
+  margin: 0;
+}
+.ad-pill {
+  background: var(--term);
+  color: #0f0d14;
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 0.85rem;
+}
+
+.ad-main input[type='text'],
+.ad-main input[type='search'],
+.ad-main input[type='number'] {
+  background: #0f0d14;
+  border: 1px solid #332b44;
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: #fff;
+  outline: none;
+  width: 100%;
+}
+.ad-main input:focus {
+  border-color: var(--term);
+}
+#filter {
+  max-width: 340px;
+}
+
+/* ---- guest table ---- */
+.ad-table-wrap {
+  overflow-x: auto;
+}
+.ad-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.ad-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7d7590;
+  padding: 10px 8px;
+  border-bottom: 1px solid #262033;
+}
+.ad-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #1f1a29;
+  vertical-align: middle;
+}
+.ad-table tr:hover td {
+  background: #1d1826;
+}
+.ad-name {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.ad-about {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: #7d7590;
+}
+.ad-need {
+  max-width: 280px;
+}
+.ad-vibes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+.ad-vibe {
+  background: #2a2238;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.ad-loc {
+  white-space: nowrap;
+}
+.ad-loc small {
+  display: block;
+  color: #7d7590;
+}
+.ad-dim {
+  color: #7d7590;
+  white-space: nowrap;
+}
+.ad-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.ad-actions .ad-btn + .ad-btn {
+  margin-left: 6px;
+}
+.ad-sure {
+  color: #ff8a95;
+  font-weight: 800;
+  margin-right: 8px;
+}
+.ad-empty {
+  color: #7d7590;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* ---- buttons ---- */
+.ad-btn {
+  border: 1px solid #3a3150;
+  background: #231d2f;
+  color: #e8e4f0;
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.ad-btn:hover {
+  border-color: #5b4d7a;
+}
+.ad-btn.primary {
+  background: var(--term);
+  border-color: var(--term);
+  color: #0f0d14;
+}
+.ad-btn.danger {
+  background: #e63946;
+  border-color: #e63946;
+  color: #fff;
+}
+.ad-btn.danger-ghost {
+  color: #ff8a95;
+}
+.ad-btn.small {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+
+/* ---- settings ---- */
+.ad-form {
+  display: grid;
+  gap: 14px;
+}
+.ad-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #cfc8dc;
+}
+.ad-form fieldset {
+  border: 1px solid #262033;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 8px;
+}
+.ad-form legend {
+  font-size: 0.8rem;
+  color: #7d7590;
+  padding: 0 6px;
+}
+.ad-form .ad-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.ad-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--term);
+}
+.ad-form-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ad-status {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.ad-status.ok {
+  color: var(--term);
+}
+.ad-status.err {
+  color: #ff8a95;
+}
+
+/* ---- network ---- */
+.ad-urls {
+  margin: 0 0 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  font-size: 0.85rem;
+}
+.ad-urls dt {
+  color: #7d7590;
+  font-weight: 700;
+}
+.ad-urls dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ad-qr {
+  width: 140px;
+  height: 140px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px;
+}
+
+/* ---- danger zone ---- */
+.ad-danger {
+  border-color: #4a1f2a;
+}
+.ad-danger p {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: #cfc8dc;
+}
+.ad-danger code {
+  color: #ff8a95;
+}
+.ad-reset {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ---- edit dialog (uses the light guest form) ---- */
+.ad-dialog {
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px);
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  padding: 20px;
+  background: var(--sun);
+  color: var(--ink);
+  box-shadow: 8px 8px 0 #000;
+}
+.ad-dialog::backdrop {
+  background: rgba(10, 8, 14, 0.7);
+  backdrop-filter: blur(3px);
+}
+.ad-dialog h2 {
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+}
