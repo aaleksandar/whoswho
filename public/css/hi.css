@@ -40,7 +40,8 @@ body.hi {
   font-size: 1.05rem;
 }
 
-#hi-main {
+#hi-main,
+#me-main {
   max-width: 560px;
   margin: 0 auto;
   padding: 16px 16px 48px;

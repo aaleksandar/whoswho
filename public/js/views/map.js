@@ -293,7 +293,7 @@ export function createMapView(root, { onInteract = () => {} } = {}) {
 
   function renderStats() {
     const located = guests.filter((g) => g.lat != null);
-    statsMain.textContent = `${located.length} of ${guests.length} shared a postcode`;
+    statsMain.textContent = `${located.length} of ${guests.length} on the map`;
     const counts = new Map();
     for (const g of located) if (g.area) counts.set(g.area, (counts.get(g.area) || 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5);

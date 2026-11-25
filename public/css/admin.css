@@ -328,8 +328,9 @@ body.admin {
 
 /* ---- edit dialog (uses the light guest form) ---- */
 .ad-dialog {
-  width: min(620px, calc(100vw - 24px));
+  width: min(640px, calc(100vw - 24px));
   max-height: calc(100vh - 40px);
+  overflow: auto;
   border: 3px solid var(--ink);
   border-radius: 22px;
   padding: 20px;

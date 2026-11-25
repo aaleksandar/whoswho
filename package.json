@@ -1,7 +1,7 @@
 {
   "name": "whoswho",
   "version": "1.0.0",
-  "description": "Local-network guest board: connection graph, map and needs views with QR registration",
+  "description": "Party board for a heart-first send-off: invite, RSVP, matches, map and a TV",
   "type": "module",
   "private": true,
   "main": "server.js",
@@ -12,7 +12,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test \"test/*.test.js\"",
-    "seed": "node scripts/seed.mjs",
+    "seed": "node scripts/seed-demo.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "build:data": "node scripts/build-data.mjs"
   },
   "dependencies": {

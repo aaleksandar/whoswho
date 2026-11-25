@@ -3,6 +3,7 @@
 
 import { h, hash01 } from '../dom.js';
 import { avatarDataUri } from '../avatar.js';
+import { needSummary } from '../catalog.js';
 
 const MIN_PAGE_SECONDS = 8;
 
@@ -79,10 +80,10 @@ export function createNeedsView(root) {
   }
 
   return {
-    hasData: (gs) => gs.some((g) => g.need),
+    hasData: (gs) => gs.some((g) => needSummary(g)),
     duration: (base) => Math.max(base, pages.length * MIN_PAGE_SECONDS),
     update(gs) {
-      const next = gs.filter((g) => g.need).sort((a, b) => b.id - a.id);
+      const next = gs.map((g) => ({ ...g, need: needSummary(g) })).filter((g) => g.need).sort((a, b) => b.id - a.id);
       const key = JSON.stringify(next.map((g) => [g.id, g.name, g.need, g.avatar]));
       if (key === itemsKey) return; // nothing on this board changed
       itemsKey = key;

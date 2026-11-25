@@ -1,36 +1,33 @@
 import { h, $ } from './dom.js';
 import { api } from './api.js';
-import { avatarDataUri } from './avatar.js';
 import { mountGuestForm } from './guest-form.js';
+import { loadMe, saveMe } from './me-store.js';
 
 const main = $('#hi-main');
 
-api('GET', '/api/settings')
-  .then((s) => {
-    if (s.title) document.title = `Say hi 👋 · ${s.title}`;
+api('GET', '/api/event')
+  .then((event) => {
+    if (event?.title) document.title = `Come as you are · ${event.title}`;
+    const title = $('#hi-title');
+    if (title && event?.hook) title.textContent = 'A few minutes. Skip anything that is not true tonight.';
   })
   .catch(() => {});
 
 function showForm() {
-  mountGuestForm(main, {
-    submitLabel: 'Put me on the board!',
+  const existing = loadMe();
+  const banner = existing?.name
+    ? h('p.hi-banner', `This phone already has ${existing.name}. `, h('a', { href: '/night' }, 'Tonight\'s page'), ' · ', h('a', { href: '/me' }, 'Edit your card'))
+    : null;
+  const slot = h('div');
+  main.replaceChildren(banner, slot);
+  mountGuestForm(slot, {
+    submitLabel: 'Put me on the board',
     onSubmit: async (value) => {
       const guest = await api('POST', '/api/guests', value);
-      showDone(guest);
+      saveMe({ token: guest.editToken, id: guest.id, name: guest.name });
+      location.assign(`/night?welcome=1#t=${encodeURIComponent(guest.editToken)}`);
     },
   });
-}
-
-function showDone(guest) {
-  main.replaceChildren(
-    h('div.hi-done',
-      h('img.avatar-img', { src: avatarDataUri(guest.avatar), alt: '' }),
-      h('h2', `You're in, ${guest.name}!`),
-      h('p', "Look at the big screen 👀 you're on the board."),
-      h('button', { type: 'button', onclick: showForm }, '➕ Register someone else'),
-    ),
-  );
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 showForm();

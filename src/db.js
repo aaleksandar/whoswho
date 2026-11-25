@@ -1,15 +1,20 @@
 // SQLite persistence (node:sqlite, synchronous). One file, survives restarts.
 
 import { DatabaseSync } from 'node:sqlite';
+import { createHash, randomBytes } from 'node:crypto';
 import { normalizeAvatar } from '../public/js/avatar.js';
 import { normalizeVibes } from '../public/js/vibes.js';
-import { resolveLocation } from './postcode.js';
+import { resolveLocation, jitter } from './postcode.js';
+import { EVENT } from './event.js';
+import {
+  LIMITS, CHAPTERS, NEEDS, OFFERS, FOOD, BRING_VIBES, AREAS, RSVP, cleanIds,
+} from '../public/js/catalog.js';
 
-export const LIMITS = { name: 40, need: 140, about: 500 };
-export const VIEW_IDS = ['graph', 'map', 'needs'];
+export { LIMITS };
+export const VIEW_IDS = ['graph', 'map', 'needs', 'bringing'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
-  title: "Who's here?",
+  title: EVENT.title,
   rotateSeconds: 20,
   views: VIEW_IDS,
 });
@@ -29,8 +34,34 @@ const MIGRATIONS = [
      updated_at TEXT
    );
    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
-  // v2: free-form "about you" text, shown on the guest's profile
   `ALTER TABLE guests ADD COLUMN about TEXT;`,
+  // v3: heart-first profile, co-creation, check-in, self-edit token, RSVPs
+  `ALTER TABLE guests ADD COLUMN chapter TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE guests ADD COLUMN chapter_note TEXT;
+   ALTER TABLE guests ADD COLUMN need_tags TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE guests ADD COLUMN offer TEXT;
+   ALTER TABLE guests ADD COLUMN offer_tags TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE guests ADD COLUMN music TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE guests ADD COLUMN soundtrack TEXT;
+   ALTER TABLE guests ADD COLUMN question TEXT;
+   ALTER TABLE guests ADD COLUMN area_chip TEXT;
+   ALTER TABLE guests ADD COLUMN links TEXT;
+   ALTER TABLE guests ADD COLUMN links_consent INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE guests ADD COLUMN bringing_kind TEXT;
+   ALTER TABLE guests ADD COLUMN bringing_text TEXT;
+   ALTER TABLE guests ADD COLUMN vibe_kind TEXT;
+   ALTER TABLE guests ADD COLUMN vibe_text TEXT;
+   ALTER TABLE guests ADD COLUMN rsvp TEXT;
+   ALTER TABLE guests ADD COLUMN checked_in INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE guests ADD COLUMN checked_in_at TEXT;
+   ALTER TABLE guests ADD COLUMN token_hash TEXT;
+   CREATE UNIQUE INDEX IF NOT EXISTS guests_token_hash ON guests(token_hash);
+   CREATE TABLE IF NOT EXISTS rsvps (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     status TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+   );`,
 ];
 
 export class ValidationError extends Error {
@@ -40,30 +71,107 @@ export class ValidationError extends Error {
   }
 }
 
-const cleanText = (v, max) =>
+export const cleanText = (v, max) =>
   typeof v === 'string' ? v.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
+
+export function newEditToken() {
+  return randomBytes(24).toString('base64url');
+}
+
+export function hashToken(token) {
+  return createHash('sha256').update(String(token)).digest('hex');
+}
+
+function cleanUrl(raw, { instagram = false } = {}) {
+  const s = cleanText(raw, LIMITS.link);
+  if (!s) return null;
+  if (instagram && /^@?[A-Za-z0-9._]{2,30}$/.test(s)) {
+    return `https://instagram.com/${s.replace(/^@/, '')}`;
+  }
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  return url.href.slice(0, LIMITS.link);
+}
+
+function cleanLinks(src) {
+  const box = src.links && typeof src.links === 'object' ? src.links : {};
+  const links = {
+    notion: cleanUrl(box.notion),
+    instagram: cleanUrl(box.instagram, { instagram: true }),
+    substack: cleanUrl(box.substack),
+    site: cleanUrl(box.site),
+  };
+  const any = Object.values(links).some(Boolean);
+  const consent = src.linksConsent === true || src.linksConsent === 1 || src.linksConsent === 'true';
+  if (!any || !consent) return { links: null, linksConsent: false };
+  return { links, linksConsent: true };
+}
 
 /** Validate + normalise user input. Throws ValidationError. */
 export function cleanGuestInput(input) {
   const src = input && typeof input === 'object' ? input : {};
   const name = cleanText(src.name, LIMITS.name);
   if (!name) throw new ValidationError('Name is required', 'name');
+  let rsvp = 'going';
+  if (src.rsvp != null && src.rsvp !== '') {
+    if (!RSVP.includes(src.rsvp)) throw new ValidationError('RSVP must be going, maybe, or no', 'rsvp');
+    rsvp = src.rsvp;
+  }
+  const areaChip = typeof src.areaChip === 'string' && AREAS.some((a) => a.id === src.areaChip) ? src.areaChip : null;
+  const bringingKind = typeof src.bringingKind === 'string' && FOOD.some((f) => f.id === src.bringingKind) ? src.bringingKind : null;
+  const vibeKind = typeof src.vibeKind === 'string' && BRING_VIBES.some((v) => v.id === src.vibeKind) ? src.vibeKind : null;
+  const { links, linksConsent } = cleanLinks(src);
   return {
     name,
     avatar: normalizeAvatar(src.avatar),
-    vibes: normalizeVibes(src.vibes),
+    vibes: normalizeVibes(src.interests ?? src.vibes, 12),
     need: cleanText(src.need, LIMITS.need) || null,
-    about: cleanText(src.about, LIMITS.about) || null,
-    postcodeInput: typeof src.postcode === 'string' ? src.postcode : '',
+    about: src.about === undefined ? undefined : (cleanText(src.about, LIMITS.about) || null),
+    postcodeInput: areaChip === 'visiting' ? '' : (typeof src.postcode === 'string' ? src.postcode : ''),
+    chapter: cleanIds(src.chapter, CHAPTERS, 3),
+    chapterNote: cleanText(src.chapterNote, LIMITS.chapterNote) || null,
+    needTags: cleanIds(src.needTags, NEEDS, 4),
+    offer: cleanText(src.offer, LIMITS.offer) || null,
+    offerTags: cleanIds(src.offerTags, OFFERS, 4),
+    music: normalizeVibes(src.music, 8),
+    soundtrack: cleanText(src.soundtrack, LIMITS.soundtrack) || null,
+    question: cleanText(src.question, LIMITS.question) || null,
+    areaChip,
+    links,
+    linksConsent,
+    bringingKind,
+    bringingText: cleanText(src.bringingText, LIMITS.bringing) || null,
+    vibeKind,
+    vibeText: cleanText(src.vibeText, LIMITS.bringing) || null,
+    rsvp,
   };
 }
 
+function parseJson(value, fallback) {
+  if (value == null || value === '') return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function rowToGuest(r) {
+  const vibes = parseJson(r.vibes, []);
+  const links = parseJson(r.links, null);
   return {
     id: r.id,
     name: r.name,
-    avatar: normalizeAvatar(JSON.parse(r.avatar)), // maps pre-spirit-animal avatars too
-    vibes: JSON.parse(r.vibes),
+    avatar: normalizeAvatar(JSON.parse(r.avatar)),
+    vibes,
+    interests: vibes,
     need: r.need,
     about: r.about,
     postcode: r.postcode,
@@ -72,13 +180,36 @@ function rowToGuest(r) {
     lng: r.lng,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    chapter: parseJson(r.chapter, []),
+    chapterNote: r.chapter_note,
+    needTags: parseJson(r.need_tags, []),
+    offer: r.offer,
+    offerTags: parseJson(r.offer_tags, []),
+    music: parseJson(r.music, []),
+    soundtrack: r.soundtrack,
+    question: r.question,
+    areaChip: r.area_chip,
+    links: links && typeof links === 'object' ? links : null,
+    linksConsent: !!r.links_consent,
+    bringingKind: r.bringing_kind,
+    bringingText: r.bringing_text,
+    vibeKind: r.vibe_kind,
+    vibeText: r.vibe_text,
+    rsvp: r.rsvp,
+    checkedIn: !!r.checked_in,
+    checkedInAt: r.checked_in_at,
   };
 }
 
-/** Public projection: no raw postcode on the shared screen / public API. */
+/** Public projection: no raw postcode, no edit token. Links only with consent. */
 export function publicGuest(g) {
-  const { postcode, ...rest } = g;
-  return rest;
+  const { postcode, editToken, links, linksConsent, ...rest } = g;
+  return { ...rest, links: linksConsent ? links : null };
+}
+
+/** The guest editing themselves can see the postcode they typed. */
+export function ownerGuest(g) {
+  return { ...publicGuest(g), postcode: g.postcode || null, links: g.links || null, linksConsent: !!g.linksConsent };
 }
 
 export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
@@ -101,18 +232,40 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
   const q = {
     all: db.prepare('SELECT * FROM guests ORDER BY id'),
     get: db.prepare('SELECT * FROM guests WHERE id = ?'),
-    insert: db.prepare('INSERT INTO guests (name, avatar, vibes, need, about) VALUES (?, ?, ?, ?, ?)'),
+    byToken: db.prepare('SELECT * FROM guests WHERE token_hash = ?'),
+    insert: db.prepare(
+      `INSERT INTO guests (
+         name, avatar, vibes, need, about, chapter, chapter_note, need_tags, offer, offer_tags,
+         music, soundtrack, question, links, links_consent, bringing_kind, bringing_text,
+         vibe_kind, vibe_text, rsvp, token_hash
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ),
     update: db.prepare(
-      `UPDATE guests SET name = ?, avatar = ?, vibes = ?, need = ?, about = ?,
+      `UPDATE guests SET name = ?, avatar = ?, vibes = ?, need = ?, about = ?, chapter = ?, chapter_note = ?,
+         need_tags = ?, offer = ?, offer_tags = ?, music = ?, soundtrack = ?, question = ?, links = ?,
+         links_consent = ?, bringing_kind = ?, bringing_text = ?, vibe_kind = ?, vibe_text = ?, rsvp = ?,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
     ),
-    setLoc: db.prepare('UPDATE guests SET postcode = ?, area = ?, lat = ?, lng = ? WHERE id = ?'),
+    setLoc: db.prepare('UPDATE guests SET postcode = ?, area = ?, lat = ?, lng = ?, area_chip = ? WHERE id = ?'),
+    check: db.prepare(
+      `UPDATE guests SET checked_in = ?, checked_in_at = CASE WHEN ? = 1 THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END WHERE id = ?`,
+    ),
     del: db.prepare('DELETE FROM guests WHERE id = ?'),
     delAll: db.prepare('DELETE FROM guests'),
     settingsAll: db.prepare('SELECT key, value FROM settings'),
     settingsPut: db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     ),
+    rsvpDel: db.prepare('DELETE FROM rsvps WHERE lower(name) = lower(?)'),
+    rsvpIns: db.prepare('INSERT INTO rsvps (name, status) VALUES (?, ?)'),
+    rsvpCounts: db.prepare('SELECT status, COUNT(*) AS n FROM rsvps GROUP BY status'),
+    rsvpAll: db.prepare('SELECT id, name, status, created_at FROM rsvps ORDER BY id'),
+  };
+
+  const rememberRsvp = (name, status) => {
+    if (!name || !RSVP.includes(status)) return;
+    q.rsvpDel.run(name);
+    q.rsvpIns.run(name, status);
   };
 
   const tx = (fn) => {
@@ -127,10 +280,48 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     }
   };
 
-  const applyLocation = (id, postcodeInput) => {
+  const applyLocation = (id, postcodeInput, areaChip) => {
+    const chip = AREAS.find((a) => a.id === areaChip);
+    if (areaChip === 'visiting') {
+      const p = jitter(EVENT.lat, EVENT.lng, `visit:${id}`);
+      q.setLoc.run(null, 'Visiting', p.lat, p.lng, 'visiting', id);
+      return;
+    }
     const loc = resolveLocation(postcodeInput, id);
-    q.setLoc.run(loc.postcode, loc.area, loc.lat, loc.lng, id);
+    if (loc.known) {
+      q.setLoc.run(loc.postcode, chip ? chip.label : loc.area, loc.lat, loc.lng, chip ? chip.id : null, id);
+      return;
+    }
+    if (chip) {
+      const p = jitter(chip.lat, chip.lng, `area:${id}:${chip.id}`);
+      q.setLoc.run(loc.postcode, chip.label, p.lat, p.lng, chip.id, id);
+      return;
+    }
+    q.setLoc.run(loc.postcode, loc.area, loc.lat, loc.lng, null, id);
   };
+
+  const pack = (c) => [
+    c.name,
+    JSON.stringify(c.avatar),
+    JSON.stringify(c.vibes),
+    c.need,
+    c.about ?? null,
+    JSON.stringify(c.chapter),
+    c.chapterNote,
+    JSON.stringify(c.needTags),
+    c.offer,
+    JSON.stringify(c.offerTags),
+    JSON.stringify(c.music),
+    c.soundtrack,
+    c.question,
+    c.links ? JSON.stringify(c.links) : null,
+    c.linksConsent ? 1 : 0,
+    c.bringingKind,
+    c.bringingText,
+    c.vibeKind,
+    c.vibeText,
+    c.rsvp,
+  ];
 
   return {
     raw: db,
@@ -143,13 +334,22 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       return r ? rowToGuest(r) : null;
     },
 
-    createGuest(input) {
+    getByToken(token) {
+      if (!token || typeof token !== 'string' || token.length > 200) return null;
+      const r = q.byToken.get(hashToken(token));
+      return r ? rowToGuest(r) : null;
+    },
+
+    createGuest(input, opts = {}) {
       const c = cleanGuestInput(input);
+      const editToken = opts.token || newEditToken();
       return tx(() => {
-        const { lastInsertRowid } = q.insert.run(c.name, JSON.stringify(c.avatar), JSON.stringify(c.vibes), c.need, c.about);
+        const about = c.about ?? null;
+        const { lastInsertRowid } = q.insert.run(...pack({ ...c, about }), hashToken(editToken));
         const id = Number(lastInsertRowid);
-        applyLocation(id, c.postcodeInput);
-        return rowToGuest(q.get.get(id));
+        applyLocation(id, c.postcodeInput, c.areaChip);
+        rememberRsvp(c.name, c.rsvp);
+        return { ...rowToGuest(q.get.get(id)), editToken };
       });
     },
 
@@ -158,18 +358,78 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       return tx(() => {
         const existing = q.get.get(id);
         if (!existing) return null;
-        q.update.run(c.name, JSON.stringify(c.avatar), JSON.stringify(c.vibes), c.need, c.about, id);
-        applyLocation(id, c.postcodeInput);
+        const about = c.about === undefined ? existing.about : c.about;
+        q.update.run(...pack({ ...c, about }), id);
+        applyLocation(id, c.postcodeInput, c.areaChip);
+        if (existing.name && existing.name.toLowerCase() !== c.name.toLowerCase()) q.rsvpDel.run(existing.name);
+        rememberRsvp(c.name, c.rsvp);
         return rowToGuest(q.get.get(id));
       });
     },
 
+    setCheckedIn(id, on) {
+      const existing = q.get.get(id);
+      if (!existing) return null;
+      q.check.run(on ? 1 : 0, on ? 1 : 0, id);
+      return rowToGuest(q.get.get(id));
+    },
+
     deleteGuest: (id) => q.del.run(id).changes > 0,
 
-    deleteAllGuests: () => Number(q.delAll.run().changes),
+    deleteAllGuests() {
+      return tx(() => {
+        const n = Number(q.delAll.run().changes);
+        db.exec('DELETE FROM rsvps');
+        return n;
+      });
+    },
+
+    addRsvp(input) {
+      const name = cleanText(input?.name, LIMITS.name);
+      if (!name) throw new ValidationError('Name is required', 'name');
+      const status = input?.status;
+      if (!RSVP.includes(status)) throw new ValidationError('Pick going, maybe, or can\'t make it', 'status');
+      tx(() => {
+        q.rsvpDel.run(name);
+        q.rsvpIns.run(name, status);
+      });
+      return { name, status, counts: this.rsvpCounts() };
+    },
+
+    rsvpCounts() {
+      const out = { going: 0, maybe: 0, no: 0 };
+      for (const row of q.rsvpCounts.all()) if (row.status in out) out[row.status] = row.n;
+      return out;
+    },
+
+    listRsvps() {
+      return q.rsvpAll.all().map((r) => ({ id: r.id, name: r.name, status: r.status, createdAt: r.created_at }));
+    },
+
+    bringingTally() {
+      const food = new Map(FOOD.map((f) => [f.id, { kind: f.id, label: f.label, count: 0, items: [] }]));
+      const vibe = new Map(BRING_VIBES.map((v) => [v.id, { kind: v.id, label: v.label, count: 0, items: [] }]));
+      for (const g of this.listGuests()) {
+        if (g.rsvp === 'no') continue;
+        if (g.bringingKind && food.has(g.bringingKind)) {
+          const row = food.get(g.bringingKind);
+          row.count += 1;
+          if (g.bringingText && row.items.length < 12) row.items.push(g.bringingText);
+        }
+        if (g.vibeKind && vibe.has(g.vibeKind)) {
+          const row = vibe.get(g.vibeKind);
+          row.count += 1;
+          if (g.vibeText && row.items.length < 12) row.items.push(g.vibeText);
+        }
+      }
+      return {
+        food: [...food.values()].filter((row) => row.count),
+        vibe: [...vibe.values()].filter((row) => row.count),
+      };
+    },
 
     getSettings() {
-      const out = { ...DEFAULT_SETTINGS };
+      const out = { ...DEFAULT_SETTINGS, views: [...DEFAULT_SETTINGS.views] };
       for (const { key, value } of q.settingsAll.all()) {
         if (key in DEFAULT_SETTINGS) out[key] = JSON.parse(value);
       }
