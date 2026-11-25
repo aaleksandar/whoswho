@@ -7,9 +7,7 @@ const main = $('#hi-main');
 
 api('GET', '/api/event')
   .then((event) => {
-    if (event?.title) document.title = `Come as you are · ${event.title}`;
-    const title = $('#hi-title');
-    if (title && event?.hook) title.textContent = 'A few minutes. Skip anything that is not true tonight.';
+    if (event?.title) document.title = event.title;
   })
   .catch(() => {});
 

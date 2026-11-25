@@ -19,7 +19,7 @@ const sections = Object.fromEntries([...document.querySelectorAll('.view')].map(
 const bar = $('#progress');
 
 let guests = [];
-let settings = { title: "Aleksandar's send-off", rotateSeconds: 20, views: ['graph', 'map', 'needs', 'bringing'] };
+let settings = { title: 'Bring your own vibe', rotateSeconds: 20, views: ['graph', 'map', 'needs', 'bringing'] };
 let current = null;
 let startedAt = 0;
 let duration = 0;

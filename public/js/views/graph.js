@@ -324,6 +324,8 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
             g.area ? h('p.profile-area', `📍 ${g.area}`) : null,
             g.checkedIn ? h('p.profile-area', '● Here tonight') : null)),
         g.question ? h('p.profile-about', g.question) : (g.about ? h('p.profile-about', prettyText(g.about)) : null),
+        blurb("What's missing", g.missing),
+        blurb("A side that's been quiet", g.hiddenSide),
         blurb('Chapter', chapterSummary(g)),
         blurb('Needs', needSummary(g)),
         blurb('Can offer', offerSummary(g)),

@@ -50,7 +50,7 @@ function rsvpCard(event) {
             : 'If you are coming, tell the room who you are. A few minutes on your phone, most of it optional.'),
           event.invited || !event.gated
             ? h('a.land-btn', { href: '/hi' }, 'Introduce yourself')
-            : h('p.gf-hint', 'Use the invite link Aleksandar sent you, then introduce yourself.'),
+            : h('p.gf-hint', 'Use the invite link you were sent, then introduce yourself.'),
         ));
       } catch (err) {
         error.hidden = false;
@@ -72,7 +72,7 @@ function inviteCard(event) {
   if (!event.gated || event.invited) {
     return h('section.gf-card.land-enter',
       h('h2.land-sub', 'Come as you are'),
-      h('p', 'Tell the room the chapter you are in, what you need, what you can offer. Then on the night, see who you should meet.'),
+      h('p', "Answer the two questions, then whatever else is true. On the night you'll see who you should meet."),
       h('a.land-btn', { href: '/hi' }, 'Introduce yourself'),
     );
   }
@@ -80,7 +80,7 @@ function inviteCard(event) {
   return h('section.gf-card',
     h('h2.land-sub', 'Got the invite?'),
     params.get('bad') ? h('p.gf-error', "That code didn't work. Try the link again.") : null,
-    h('p', 'The guest list stays behind the link Aleksandar sent. The time and place above are the only public part.'),
+    h('p', 'The guest list stays behind the invite link. The time and place above are the only public part.'),
     h('form', { action: '/', method: 'get' },
       next && next.startsWith('/') && !next.startsWith('//') ? h('input', { type: 'hidden', name: 'next', value: next }) : null,
       h('input', { type: 'text', name: 'invite', placeholder: 'Invite code', autocomplete: 'off', autocapitalize: 'none', required: true }),
@@ -95,6 +95,10 @@ function render(event) {
     h('p.land-kicker', event.kicker),
     h('h1.land-title', event.title),
     h('p.land-hook', event.hook),
+    h('div.land-themes', ...(event.themes || []).map((theme) => h('section.gf-card.land-theme',
+      h('h2.land-q', theme.q),
+      h('p', theme.text),
+    ))),
     h('section.gf-card',
       h('h2.land-sub', 'When & where'),
       h('p.land-when', `${event.when} · ${event.time}`),
@@ -110,6 +114,7 @@ function render(event) {
       h('h2.land-sub', 'Bring a little'),
       ...event.bring.map((item) => h('div.land-bring', h('b', item.title), h('p', item.text))),
     ),
+    event.footnote ? h('p.land-note', event.footnote) : null,
     rsvpCard(event),
     inviteCard(event),
     h('p.land-foot', 'Not a networking thing.'),

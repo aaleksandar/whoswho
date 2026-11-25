@@ -6,6 +6,19 @@
   gap: 16px;
 }
 
+.gf-card.gf-lead {
+  background: #fff8dc;
+}
+
+.gf-ai .land-btn {
+  margin-top: 8px;
+}
+
+.gf-ai-status {
+  font-weight: 750;
+  margin: 8px 0 0;
+}
+
 .gf-card {
   background: #fff;
   border: 3px solid var(--ink);

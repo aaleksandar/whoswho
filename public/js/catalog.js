@@ -1,12 +1,19 @@
 // Heart-first chips and copy for the party. Shared by the browser and the server.
 // Night-quest prompts can reuse these ids and labels later; nothing here is work-flavoured.
 
+export const LEAD = Object.freeze({
+  missing: "What's missing in your life right now?",
+  hiddenSide: "What side of you haven't you got to show in a while?",
+});
+
 export const LIMITS = {
   name: 40,
   need: 140,
   offer: 140,
   about: 500,
   question: 180,
+  missing: 220,
+  hiddenSide: 220,
   soundtrack: 160,
   chapterNote: 80,
   bringing: 80,
@@ -145,6 +152,12 @@ export function needSummary(g) {
   const parts = labelsFor(NEEDS, g?.needTags);
   if (g?.need) parts.push(g.need);
   return parts.join(' · ');
+}
+
+/** The needs board prefers the lead "what's missing" answer, then the chips. */
+export function missingLine(g) {
+  if (g?.missing) return g.missing;
+  return needSummary(g);
 }
 
 export function offerSummary(g) {

@@ -1,16 +1,16 @@
 # whoswho
 
-A guest board for a small party. Built for Aleksandar's send-off before Vietnam: Friday 27 November 2026, 7:30pm, 8 Dereham Place, London EC2A 3HJ.
+A guest board for a small party. "Bring your own vibe": Friday 27 November 2026, 7:30pm, 8 Dereham Place, London EC2A 3HJ. Aleksandar is hosting, the weekend before he heads to Vietnam.
 
 Phone pages for the people in the room, a TV for the wall.
 
 - **`/`** is the invite. Time, place, why this night exists, what to bring, and an RSVP. Edit the words in `src/event.js`.
-- **`/hi`** is the card. Chapter, what you need, what you can offer, rabbit holes, a question, a soundtrack, a London area, optional links (only with a ticked consent box), and what you are bringing. Most of it is optional. This phone stores an edit token so you can change or delete the card at `/me`.
+- **`/hi`** is the card. It leads with what's missing and the side of you that has been quiet, then chapter, need, offer, rabbit holes, a question, a soundtrack, a London area, optional links (only with a ticked consent box), and what you are bringing. "Fill it in with your AI" copies the questions and can pre-fill a reply you paste back. Nothing submits until you do. Most of it is optional. This phone stores an edit token so you can change or delete the card at `/me`.
 - **`/night`** is the page for the night: check in, your top matches with a one-line reason, a filterable directory, an icebreaker deck drawn from people's own questions, and the shared playlist.
 - **`/home`** is the TV. It rotates a connection graph, a London map, a needs board, and what people are bringing. A QR code points at the invite.
 - **`/hax0r`** is admin: edit or delete anyone, including the new fields, flip the views, reset the night. It also shows the door QR (`/night?door=1`), which checks in the phone that scans it.
 
-Matching is offline. It scores need against offer, shared chapter, interest and music clusters (`philosophy` meets `philosophical`, `deep house` meets `house music`), and neighbourhood. The TV graph uses those same edges. An optional LLM can rewrite the reason lines; the board works with the env vars unset.
+Matching is offline. It scores what's missing against what someone offers, a hidden side against shared interests, need against offer, shared chapter, interest and music clusters (`philosophy` meets `philosophical`, `deep house` meets `house music`), and neighbourhood. The TV graph uses those same edges. An optional LLM can rewrite the reason lines; the board works with the env vars unset.
 
 `matchTags()` in `public/js/match.js` is the stable label list a later "night quests" feature can reuse.
 
@@ -78,7 +78,7 @@ fly deploy
 
 Then:
 
-1. Open `https://<your-app>.fly.dev/?invite=<INVITE_CODE>` on your phone. You should see the send-off, not a password prompt.
+1. Open `https://<your-app>.fly.dev/?invite=<INVITE_CODE>` on your phone. You should see "Bring your own vibe", not a password prompt.
 2. RSVP, then "Introduce yourself", then you should land on `/night`.
 3. On the TV, open `https://<your-app>.fly.dev/home?invite=<INVITE_CODE>` once. The cookie sticks. Press **F**.
 4. Admin is `https://<your-app>.fly.dev/hax0r` (any username, `ADMIN_PASSWORD`). Print or screenshot the **door QR** on that page and put it by the door. Scanning it on a phone that already registered checks that person in.

@@ -166,7 +166,12 @@ describe('party board', () => {
     assert.equal(info.nightUrl, 'https://party.example.com/night');
     assert.equal(info.doorUrl, 'https://party.example.com/night?door=1');
     const event = (await s.call('GET', '/api/event')).json;
-    assert.match(event.hook, /Vietnam/);
+    assert.equal(event.title, 'Bring your own vibe');
+    assert.match(event.hook, /vibe/i);
+    assert.doesNotMatch(event.hook, /Aleksandar/);
+    assert.match(event.footnote, /Vietnam/);
+    assert.ok(event.themes.some((theme) => /missing/i.test(theme.q)));
+    assert.ok(event.themes.some((theme) => /side of you/i.test(theme.q)));
     assert.equal(event.place, '8 Dereham Place, London EC2A 3HJ');
     assert.equal(event.playlistUrl, 'https://example.com/playlist');
     assert.equal(event.gated, false);
@@ -186,6 +191,8 @@ describe('party board', () => {
       music: ['deep house'],
       soundtrack: 'Khruangbin',
       question: 'How do you stay soft while starting over?',
+      missing: 'someone who will listen without fixing it',
+      hiddenSide: 'the part of me that still wants to paint',
       areaChip: 'dalston',
       bringingKind: 'fruit',
       bringingText: 'clementines',
@@ -199,6 +206,8 @@ describe('party board', () => {
     assert.equal(a.json.area, 'Dalston');
     assert.ok(a.json.editToken);
     assert.deepEqual(a.json.chapter, ['moving']);
+    assert.equal(a.json.missing, 'someone who will listen without fixing it');
+    assert.equal(a.json.hiddenSide, 'the part of me that still wants to paint');
     assert.equal(a.json.links.instagram, 'https://instagram.com/maya.writes');
     assert.equal(a.json.links.site, null);
     assert.ok(!('postcode' in a.json));

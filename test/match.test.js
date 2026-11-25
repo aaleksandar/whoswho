@@ -33,6 +33,34 @@ test('clusters connect near-matches and leave exact tags alone', () => {
   assert.ok(fit.labels.includes('need ↔ offer'));
 });
 
+test('a long missing answer still reaches an offer past thirty characters', () => {
+  const scored = scorePair(
+    { id: 1, missing: 'I have been circling it for months and what I actually need is someone who will listen' },
+    { id: 2, offerTags: ['ear'], offer: 'I can sit with it and not fix it' },
+  );
+  assert.match(scored.reason, /listening ear/);
+  assert.ok(scored.labels.includes('missing ↔ offer'));
+});
+
+test('what is missing lines up with what someone offers', () => {
+  const scored = scorePair(
+    { id: 1, missing: 'a spare room, and someone who will actually listen' },
+    { id: 2, offerTags: ['spare-room', 'ear'], offer: 'a sofa for a few weeks' },
+  );
+  assert.match(scored.reason, /missing for you lines up/);
+  assert.match(scored.reason, /spare room/);
+  assert.ok(scored.labels.includes('missing ↔ offer'));
+});
+
+test('a hidden side is a reason when it meets theirs', () => {
+  const scored = scorePair(
+    { id: 1, hiddenSide: 'I have not painted in years' },
+    { id: 2, interests: ['art'], hiddenSide: 'the part of me that still paints' },
+  );
+  assert.match(scored.reason, /art/);
+  assert.ok(scored.labels.includes('hidden side'));
+});
+
 test('checked-in people are offered first', () => {
   const viewer = { id: 1, interests: ['poetry'], music: ['jazz'] };
   const guests = [

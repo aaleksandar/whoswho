@@ -65,6 +65,7 @@ function matchesBlock(matches) {
       h('div',
         h('div.night-name', row.guest.name, row.checkedIn ? h('span.night-pill', 'Here') : null),
         h('p.night-reason', row.reason),
+        row.guest.hiddenSide ? h('p.night-q', row.guest.hiddenSide) : null,
         row.guest.question ? h('p.night-q', `“${row.guest.question}”`) : null,
       ),
     ))),
@@ -72,16 +73,19 @@ function matchesBlock(matches) {
 }
 
 function icebreaker(list) {
-  const deck = list.filter((g) => g.question);
+  const deck = list.flatMap((g) => [
+    g.question ? { g, kind: 'question', text: g.question } : null,
+    g.hiddenSide ? { g, kind: 'side', text: g.hiddenSide } : null,
+  ].filter(Boolean));
   if (!deck.length) return null;
   let i = 0;
   const card = h('div.night-ice');
   const draw = () => {
-    const g = deck[i % deck.length];
+    const item = deck[i % deck.length];
     card.replaceChildren(
-      personFace(g, 56),
-      h('p.night-ask', `${g.name} asks`),
-      h('blockquote', g.question),
+      personFace(item.g, 56),
+      h('p.night-ask', item.kind === 'side' ? `${item.g.name} hasn't shown this in a while` : `${item.g.name} asks`),
+      h('blockquote', item.text),
     );
   };
   draw();
@@ -96,7 +100,7 @@ function icebreaker(list) {
 }
 
 function passes(g, filter) {
-  if (filter.q && !`${g.name} ${g.question || ''} ${g.area || ''}`.toLowerCase().includes(filter.q)) return false;
+  if (filter.q && !`${g.name} ${g.question || ''} ${g.missing || ''} ${g.hiddenSide || ''} ${g.area || ''}`.toLowerCase().includes(filter.q)) return false;
   if (filter.area && (g.area || '') !== filter.area) return false;
   if (filter.need && !(g.needTags || []).includes(filter.need)) return false;
   if (filter.offer && !(g.offerTags || []).includes(filter.offer)) return false;
@@ -154,6 +158,8 @@ function dirCard(g) {
     h('div',
       h('div.night-name', g.name, g.checkedIn ? h('span.night-pill', 'Here') : null),
       bits.length ? h('p', bits.join(' · ')) : null,
+      g.missing ? h('p.night-q', g.missing) : null,
+      g.hiddenSide ? h('p', g.hiddenSide) : null,
       g.question ? h('p.night-q', g.question) : null,
       (bring.food || bring.vibe) ? h('p', [bring.food, bring.vibe].filter(Boolean).join(' / ')) : null,
       g.links ? h('p.night-links',
@@ -189,7 +195,7 @@ function render(matches) {
       )
       : h('section.night-block',
         h('h2', 'Playlist'),
-        h('p', 'The shared playlist link is not up yet. Ask Aleksandar, or it will appear here once PLAYLIST_URL is set.'),
+        h('p', 'The shared playlist link is not up yet. It will show up here once it is set.'),
       ),
     icebreaker(guests) || '',
     directory(),

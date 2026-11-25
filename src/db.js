@@ -62,6 +62,11 @@ const MIGRATIONS = [
      status TEXT NOT NULL,
      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
    );`,
+  // v4: the two lead questions. Also retitle a board still using the old default.
+  `ALTER TABLE guests ADD COLUMN missing TEXT;
+   ALTER TABLE guests ADD COLUMN hidden_side TEXT;
+   UPDATE settings SET value = '"Bring your own vibe"'
+     WHERE key = 'title' AND value = '"Aleksandar''s send-off"';`,
 ];
 
 export class ValidationError extends Error {
@@ -142,6 +147,8 @@ export function cleanGuestInput(input) {
     music: normalizeVibes(src.music, 8),
     soundtrack: cleanText(src.soundtrack, LIMITS.soundtrack) || null,
     question: cleanText(src.question, LIMITS.question) || null,
+    missing: cleanText(src.missing, LIMITS.missing) || null,
+    hiddenSide: cleanText(src.hiddenSide, LIMITS.hiddenSide) || null,
     areaChip,
     links,
     linksConsent,
@@ -188,6 +195,8 @@ function rowToGuest(r) {
     music: parseJson(r.music, []),
     soundtrack: r.soundtrack,
     question: r.question,
+    missing: r.missing,
+    hiddenSide: r.hidden_side,
     areaChip: r.area_chip,
     links: links && typeof links === 'object' ? links : null,
     linksConsent: !!r.links_consent,
@@ -236,13 +245,14 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     insert: db.prepare(
       `INSERT INTO guests (
          name, avatar, vibes, need, about, chapter, chapter_note, need_tags, offer, offer_tags,
-         music, soundtrack, question, links, links_consent, bringing_kind, bringing_text,
-         vibe_kind, vibe_text, rsvp, token_hash
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         music, soundtrack, question, missing, hidden_side, links, links_consent,
+         bringing_kind, bringing_text, vibe_kind, vibe_text, rsvp, token_hash
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     update: db.prepare(
       `UPDATE guests SET name = ?, avatar = ?, vibes = ?, need = ?, about = ?, chapter = ?, chapter_note = ?,
-         need_tags = ?, offer = ?, offer_tags = ?, music = ?, soundtrack = ?, question = ?, links = ?,
+         need_tags = ?, offer = ?, offer_tags = ?, music = ?, soundtrack = ?, question = ?,
+         missing = ?, hidden_side = ?, links = ?,
          links_consent = ?, bringing_kind = ?, bringing_text = ?, vibe_kind = ?, vibe_text = ?, rsvp = ?,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
     ),
@@ -314,6 +324,8 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     JSON.stringify(c.music),
     c.soundtrack,
     c.question,
+    c.missing,
+    c.hiddenSide,
     c.links ? JSON.stringify(c.links) : null,
     c.linksConsent ? 1 : 0,
     c.bringingKind,

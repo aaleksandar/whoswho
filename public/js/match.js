@@ -22,10 +22,10 @@ export const CLUSTERS = [
   { id: 'urbanism', label: 'urbanism', aliases: ['urbanism', 'urban', 'cities', 'city life'] },
   { id: 'third-places', label: 'third places', aliases: ['third places', 'third place'] },
   { id: 'spirituality', label: 'spirituality', aliases: ['spirituality', 'spiritual', 'mysticism'] },
-  { id: 'art', label: 'art', aliases: ['art', 'painting', 'drawing', 'illustration'] },
+  { id: 'art', label: 'art', aliases: ['art', 'painting', 'drawing', 'illustration', 'paint'] },
   { id: 'poetry', label: 'poetry', aliases: ['poetry', 'poems', 'poem'] },
   { id: 'love', label: 'love & relationships', aliases: ['love & relationships', 'love and relationships', 'relationships', 'intimacy'] },
-  { id: 'music', label: 'music', aliases: ['music'] },
+  { id: 'music', label: 'music', aliases: ['music', 'sing', 'dance'] },
   { id: 'film', label: 'film', aliases: ['film', 'films', 'cinema', 'movies'] },
   { id: 'books', label: 'books', aliases: ['books', 'reading', 'literature', 'novels'] },
   { id: 'travel', label: 'travel', aliases: ['travel', 'travelling', 'traveling'] },
@@ -47,11 +47,104 @@ export const CLUSTERS = [
 
 const NAME_STOP = new Set(['the', 'and', 'for', 'with', 'song', 'songs', 'track', 'tracks', 'music', 'soundtrack', 'various', 'remix']);
 
+const WORD_STOP = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'been', 'being', 'your', 'you',
+  'yours', 'mine', 'myself', 'someone', 'something', 'someone', 'right', 'now', 'life', 'just',
+  'really', 'very', 'into', 'want', 'wanted', 'need', 'needs', 'missing', 'side', 'shown',
+  'show', 'while', 'again', 'lately', 'years', 'year', 'people', 'person', 'thing', 'things',
+  'about', 'would', 'could', 'should', 'there', 'their', 'them', 'they', 'what', 'when',
+  'where', 'which', 'who', 'whom', 'whose', 'been', 'more', 'some', 'than', 'then', 'also',
+  'still', 'much', 'like', 'feel', 'feeling', 'room', 'night', 'tonight', 'will',
+  'actually', 'without', 'first', 'good', 'long', 'kind', 'week', 'weeks', 'going',
+]);
+
+/** Offer cues a free-text "what's missing" answer can hit. */
+const OFFER_CUES = [
+  { id: 'spare-room', label: 'a spare room or sofa', needles: ['spare room', 'sofa', 'housemate', 'flatmate', 'somewhere to live', 'place to live', 'a room', 'apartment'] },
+  { id: 'ear', label: 'a listening ear', needles: ['listen', 'listening', 'someone to talk', 'be heard', 'emotional support', 'a friend'] },
+  { id: 'intro', label: 'introductions', needles: ['introduction', 'introduce me', 'people to meet'] },
+  { id: 'collab', label: 'making something together', needles: ['collaborat', 'make something', 'make things', 'create with'] },
+  { id: 'accountability', label: 'accountability', needles: ['accountability', 'check in on me', 'notice if i'] },
+  { id: 'meal', label: 'a meal', needles: ['someone to cook', 'eat together', 'a meal', 'dinner with'] },
+  { id: 'local', label: 'local knowledge', needles: ['local knowledge', 'new to the area', 'know the area', 'know the neighbourhood', 'know the neighborhood'] },
+  { id: 'walk', label: 'a walk', needles: ['a walk', 'someone to walk', 'walk with'] },
+  { id: 'questions', label: 'good questions', needles: ['good questions', 'someone to ask'] },
+];
+
 function phraseMatch(text, alias) {
   if (text === alias) return true;
   if (alias.length < 6) return false;
   const esc = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\s)${esc}(?:\\s|$)`).test(text);
+}
+
+/** Lowercase a sentence without the 30-character vibe cap. */
+function plain(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function wordExtends(word, alias) {
+  if (word === alias) return true;
+  if (alias.length < 4 || !word.startsWith(alias)) return false;
+  return ['s', 'es', 'ed', 'ing', 'er', 'ers'].includes(word.slice(alias.length));
+}
+
+/** Cluster labels found inside a sentence. No raw-text fallback. */
+function textClusters(raw) {
+  const text = plain(raw);
+  if (!text) return [];
+  const words = text.split(/[^a-z0-9&+]+/).filter(Boolean);
+  const labels = [];
+  for (const cluster of CLUSTERS) {
+    const hit = cluster.aliases.some((alias) => phraseMatch(text, alias) || words.some((word) => wordExtends(word, alias)));
+    if (hit && !labels.includes(cluster.label)) labels.push(cluster.label);
+  }
+  return labels;
+}
+
+function contentWords(raw) {
+  return plain(raw)
+    .split(/[^a-z0-9&+]+/)
+    .filter((word) => word.length >= 4 && !WORD_STOP.has(word));
+}
+
+function missingFit(needer, giver) {
+  const text = plain(needer?.missing);
+  if (!text) return null;
+  const offerTags = giver?.offerTags || [];
+  const offerText = plain(giver?.offer);
+  const hits = [];
+  for (const cue of OFFER_CUES) {
+    const asked = cue.needles.some((needle) => text.includes(needle));
+    const offered = offerTags.includes(cue.id) || cue.needles.some((needle) => offerText.includes(needle));
+    if (asked && offered) hits.push(cue);
+  }
+  if (hits.length) {
+    return {
+      offerIds: hits.map((cue) => cue.id),
+      phrase: `what's missing for you lines up with what they offer: ${joinAnd(hits.slice(0, 2).map((cue) => cue.label))}`,
+    };
+  }
+  const shared = contentWords(text).filter((word) => contentWords(offerText).includes(word));
+  if (!shared.length) return null;
+  return {
+    offerIds: [],
+    phrase: `what's missing for you lines up with what they offer (${shared.slice(0, 2).join(', ')})`,
+  };
+}
+
+function sideLink(a, b) {
+  const aSide = textClusters(a?.hiddenSide);
+  const bSide = textClusters(b?.hiddenSide);
+  const both = aSide.filter((label) => bSide.includes(label));
+  if (both.length) return `you both have a side that wants ${joinAnd(both.slice(0, 2))}`;
+  const theirs = explode(interestList(b)).map((item) => item.label);
+  const meet = aSide.filter((label) => theirs.includes(label));
+  if (meet.length) return `the side you haven't shown is into ${joinAnd(meet.slice(0, 2))}, and so are they`;
+  const shared = contentWords(a?.hiddenSide).filter((word) => contentWords(b?.hiddenSide).includes(word));
+  if (shared.length) return `you both named ${shared.slice(0, 2).join(' and ')} as a side that's been quiet`;
+  return null;
 }
 
 export function labelsForTag(raw) {
@@ -199,6 +292,9 @@ export function scorePair(a, b) {
   const youNeed = complementLine(a, b);
   const theyNeed = complementLine(b, a);
   const complement = !!(youNeed || theyNeed);
+  const miss = missingFit(a, b);
+  const side = sideLink(a, b);
+  const missCovered = miss && youNeed && miss.offerIds.includes(youNeed.offer);
 
   let score = 0;
   score += Math.min(28, interests.length * 12);
@@ -206,6 +302,8 @@ export function scorePair(a, b) {
   if (chapters.length) score += 14;
   score += prox.points;
   if (complement) score += 18;
+  if (miss && !missCovered) score += 16;
+  if (side) score += 12;
   score = Math.min(100, score);
 
   const labels = dedupe([
@@ -214,6 +312,8 @@ export function scorePair(a, b) {
     ...music.map((item) => item.label),
     prox.edgeLabel,
     complement ? 'need ↔ offer' : null,
+    miss && !missCovered ? 'missing ↔ offer' : null,
+    side ? 'hidden side' : null,
   ]).slice(0, 8);
 
   const into = dedupe([
@@ -227,6 +327,8 @@ export function scorePair(a, b) {
   if (prox.phrase) bits.push(prox.phrase);
   if (youNeed) bits.push(youNeed.youNeed);
   else if (theyNeed) bits.push(theyNeed.theyNeed);
+  if (miss && !missCovered) bits.push(miss.phrase);
+  if (side) bits.push(side);
   const reason = bits.join(', ');
 
   return { score: reason ? score : 0, labels: reason ? labels : [], reason, complement };

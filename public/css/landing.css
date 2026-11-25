@@ -33,6 +33,33 @@
   margin: 0 0 18px;
 }
 
+.land-themes {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.land-q {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.6rem, 6vw, 2.1rem);
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  margin: 0 0 8px;
+}
+
+.land-main > .gf-card {
+  margin-top: 14px;
+}
+
+.land-note {
+  text-align: center;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  margin: 16px 12px 2px;
+  color: var(--ink);
+}
+
 .land-sub {
   font-family: var(--display);
   font-weight: 400;

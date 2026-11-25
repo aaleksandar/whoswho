@@ -7,7 +7,7 @@
 .night-head h1 {
   font-family: var(--display);
   font-weight: 400;
-  font-size: clamp(2.8rem, 12vw, 4.2rem);
+  font-size: clamp(2.15rem, 9vw, 3.4rem);
   letter-spacing: 0.03em;
   line-height: 0.9;
   margin: 4px 0 8px;

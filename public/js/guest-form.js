@@ -5,8 +5,9 @@ import { api } from './api.js';
 import { AVATAR_DIMENSIONS, avatarDataUri, randomAvatar, normalizeAvatar } from './avatar.js';
 import { normalizeVibe, MAX_VIBE_LEN } from './vibes.js';
 import {
-  LIMITS, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS,
+  LIMITS, LEAD, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS,
 } from './catalog.js';
+import { aiPrompt, parseAiAnswers } from './ai-fill.js';
 
 const MAX_INTERESTS = 12;
 
@@ -24,6 +25,8 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     avatar: initial ? normalizeAvatar(initial.avatar) : randomAvatar(),
     chapter: [...(initial?.chapter || [])],
     chapterNote: initial?.chapterNote || '',
+    missing: initial?.missing || '',
+    hiddenSide: initial?.hiddenSide || '',
     needTags: [...(initial?.needTags || [])],
     need: initial?.need || '',
     offerTags: [...(initial?.offerTags || [])],
@@ -187,6 +190,90 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     },
   }, '🔀 Shuffle');
 
+  // ---------------------------------------------------------------- the two lead questions
+  const missingInput = areaInput('gf-missing', 'missing', {
+    max: LIMITS.missing,
+    rows: 3,
+    placeholder: 'A person, a place, a kind of courage, a next step…',
+  });
+  const hiddenInput = areaInput('gf-hidden', 'hiddenSide', {
+    max: LIMITS.hiddenSide,
+    rows: 3,
+    placeholder: 'The part that has been quiet. A hobby, a voice, a way of being…',
+  });
+
+  // ---------------------------------------------------------------- fill with your AI
+  const aiStatus = h('p.gf-ai-status', { hidden: true });
+  const aiPaste = h('textarea#gf-ai-paste', {
+    rows: 5,
+    placeholder: 'Paste what your AI replied. JSON or labelled lines. You still review it.',
+  });
+  async function copyPrompt() {
+    const text = aiPrompt();
+    try {
+      await navigator.clipboard.writeText(text);
+      noteAi('Copied. Paste it into ChatGPT, Claude, or whatever you use.');
+    } catch {
+      aiPaste.value = text;
+      aiPaste.focus();
+      aiPaste.select();
+      noteAi('Clipboard was blocked. The prompt is in the box. Copy it from there.');
+    }
+  }
+  function noteAi(text) {
+    aiStatus.hidden = false;
+    aiStatus.textContent = text;
+  }
+  function applyAi() {
+    const parsed = parseAiAnswers(aiPaste.value);
+    if (!Object.keys(parsed).length) {
+      noteAi("Couldn't find answers in that. Paste the JSON block or the labelled lines.");
+      return;
+    }
+    const set = (key, input, value) => {
+      state[key] = value;
+      if (input) input.value = value;
+    };
+    if (parsed.name) set('name', nameInput, parsed.name);
+    if (parsed.missing != null) set('missing', missingInput, parsed.missing);
+    if (parsed.hiddenSide != null) set('hiddenSide', hiddenInput, parsed.hiddenSide);
+    if (parsed.chapter) { state.chapter = parsed.chapter; chapter.draw(); }
+    if (parsed.chapterNote != null) set('chapterNote', chapterNoteInput, parsed.chapterNote);
+    if (parsed.needTags) { state.needTags = parsed.needTags; needs.draw(); }
+    if (parsed.need != null) set('need', needInput, parsed.need);
+    if (parsed.offerTags) { state.offerTags = parsed.offerTags; offers.draw(); }
+    if (parsed.offer != null) set('offer', offerInput, parsed.offer);
+    if (parsed.interests) { state.interests = parsed.interests; drawInterests(); }
+    if (parsed.question != null) set('question', questionInput, parsed.question);
+    if (parsed.music) { state.music = parsed.music; music.draw(); }
+    if (parsed.soundtrack != null) set('soundtrack', soundtrackInput, parsed.soundtrack);
+    if (parsed.areaChip) {
+      state.areaChip = parsed.areaChip;
+      areas.draw();
+      pcWrap.hidden = parsed.areaChip === 'visiting';
+      if (parsed.areaChip === 'visiting') { state.postcode = ''; pcInput.value = ''; }
+    }
+    if (parsed.postcode != null && state.areaChip !== 'visiting') {
+      set('postcode', pcInput, parsed.postcode);
+      checkPostcode();
+    }
+    if (parsed.bringingKind) { state.bringingKind = parsed.bringingKind; food.draw(); }
+    if (parsed.bringingText != null) set('bringingText', bringInput, parsed.bringingText);
+    if (parsed.vibeKind) { state.vibeKind = parsed.vibeKind; vibeBring.draw(); }
+    if (parsed.vibeText != null) set('vibeText', vibeInput, parsed.vibeText);
+    if (parsed.rsvp) { state.rsvp = parsed.rsvp; rsvp.draw(); }
+    if (parsed.links) {
+      for (const key of ['notion', 'instagram', 'substack', 'site']) {
+        if (parsed.links[key]) {
+          state.links[key] = parsed.links[key];
+          linkInputs[key].value = parsed.links[key];
+        }
+      }
+    }
+    const filled = Object.keys(parsed).length;
+    noteAi(`Filled ${filled} ${filled === 1 ? 'field' : 'fields'}. Nothing was submitted. Read it back, then put yourself on the board.${parsed.links ? ' Tick the links box if you want those on your card.' : ''}`);
+  }
+
   // ---------------------------------------------------------------- chapter / need / offer
   const chapter = multi('chapter', CHAPTERS, 3);
   const needs = multi('needTags', NEEDS, 4);
@@ -302,6 +389,14 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
   loadTally();
   const tallyTimer = setInterval(loadTally, 15000);
 
+  const chapterNoteInput = areaInput('gf-chapter-note', 'chapterNote', { max: LIMITS.chapterNote, placeholder: 'In your words, if the chips miss it', rows: 2 });
+  const needInput = areaInput('gf-need-text', 'need', { max: LIMITS.need, placeholder: 'A spare room in Hackney, a clearer next step, someone to talk to…' });
+  const offerInput = areaInput('gf-offer-text', 'offer', { max: LIMITS.offer, placeholder: 'A Sunday roast, a spare sofa for a month, a long walk…' });
+  const questionInput = lineInput('gf-question', 'question', { max: LIMITS.question, placeholder: 'What would you love to ask someone in this room?' });
+  const soundtrackInput = lineInput('gf-soundtrack', 'soundtrack', { max: LIMITS.soundtrack, placeholder: '2 or 3 artists or tracks on repeat' });
+  const bringInput = lineInput('gf-bring', 'bringingText', { max: LIMITS.bringing, placeholder: 'Clementines, a bottle of red, a bag of crisps…' });
+  const vibeInput = lineInput('gf-vibe-bring', 'vibeText', { max: LIMITS.bringing, placeholder: 'A 20-minute DJ set, a tarot deck, a game…' });
+
   // ---------------------------------------------------------------- submit
   const submitBtn = h('button.gf-submit', { type: 'submit' }, submitLabel);
   const form = h('form.gf', {
@@ -335,6 +430,25 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       rsvp.el,
       rsvpHint,
     ),
+    h('section.gf-card.gf-lead',
+      h('label.gf-label', { for: 'gf-missing' }, LEAD.missing),
+      missingInput,
+      h('p.gf-hint', 'This is matched with what other people can offer.'),
+    ),
+    h('section.gf-card.gf-lead',
+      h('label.gf-label', { for: 'gf-hidden' }, LEAD.hiddenSide),
+      hiddenInput,
+      h('p.gf-hint', 'It shows on your card, and it can turn up as an icebreaker.'),
+    ),
+    h('section.gf-card.gf-ai',
+      h('div.gf-label', 'Fill it in with your AI'),
+      h('p.gf-hint', 'Copies every question as one prompt. Your AI can interview you, or draft from what it already knows. Paste the reply back and check it. Nothing is sent until you submit.'),
+      h('button.land-btn.ghost', { type: 'button', onclick: copyPrompt }, 'Copy the questions'),
+      aiStatus,
+      h('label.gf-label.gf-sub', { for: 'gf-ai-paste' }, "Paste your AI's answers"),
+      aiPaste,
+      h('button.land-btn', { type: 'button', onclick: applyAi }, 'Fill the form'),
+    ),
     h('section.gf-card.gf-avatar',
       h('div.gf-label', 'Your spirit animal'),
       h('div.gf-preview-wrap', preview, shuffleBtn),
@@ -342,11 +456,11 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       h('details.gf-more', h('summary', 'Glasses, hat, colour'), ...dimBlocks.filter((d) => d.dim.key !== 'animal').map((d) => d.el)),
     ),
     field('gf-chapter', 'The chapter you are in ', chapter.el, 'Tap what fits. Add a line if you want.'),
-    h('section.gf-card', areaInput('gf-chapter-note', 'chapterNote', { max: LIMITS.chapterNote, placeholder: 'In your words, if the chips miss it', rows: 2 })),
+    h('section.gf-card', chapterNoteInput),
     field('gf-need', 'What you need right now ', needs.el),
-    h('section.gf-card', areaInput('gf-need-text', 'need', { max: LIMITS.need, placeholder: 'A spare room in Hackney, a clearer next step, someone to talk to…' })),
+    h('section.gf-card', needInput),
     field('gf-offer', 'What you can offer someone ', offers.el),
-    h('section.gf-card', areaInput('gf-offer-text', 'offer', { max: LIMITS.offer, placeholder: 'A Sunday roast, a spare sofa for a month, a long walk…' })),
+    h('section.gf-card', offerInput),
     h('section.gf-card',
       h('label.gf-label', { for: 'gf-interest' }, 'Rabbit holes ', h('small', 'optional')),
       interestBox,
@@ -356,13 +470,13 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     ),
     h('section.gf-card',
       h('label.gf-label', { for: 'gf-question' }, 'A question for tonight ', h('small', 'optional')),
-      lineInput('gf-question', 'question', { max: LIMITS.question, placeholder: 'What would you love to ask someone in this room?' }),
+      questionInput,
       h('p.gf-hint', 'It might get pulled as an icebreaker. Keep it one you actually want to be asked.'),
     ),
     h('section.gf-card',
       h('div.gf-label', 'Soundtrack ', h('small', 'optional')),
       music.el,
-      lineInput('gf-soundtrack', 'soundtrack', { max: LIMITS.soundtrack, placeholder: '2 or 3 artists or tracks on repeat' }),
+      soundtrackInput,
     ),
     h('section.gf-card',
       h('label.gf-label', { for: 'gf-postcode' }, 'London ', h('small', 'optional')),
@@ -382,10 +496,10 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     h('section.gf-card',
       h('div.gf-label', 'Something for the table ', h('small', 'optional')),
       food.el,
-      lineInput('gf-bring', 'bringingText', { max: LIMITS.bringing, placeholder: 'Clementines, a bottle of red, a bag of crisps…' }),
+      bringInput,
       h('div.gf-label.gf-sub', 'A piece of your vibe'),
       vibeBring.el,
-      lineInput('gf-vibe-bring', 'vibeText', { max: LIMITS.bringing, placeholder: 'A 20-minute DJ set, a tarot deck, a game…' }),
+      vibeInput,
       tally,
     ),
     errorBox,
@@ -403,6 +517,8 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       avatar: state.avatar,
       chapter: state.chapter,
       chapterNote: state.chapterNote.trim(),
+      missing: state.missing.trim(),
+      hiddenSide: state.hiddenSide.trim(),
       needTags: state.needTags,
       need: state.need.trim(),
       offerTags: state.offerTags,

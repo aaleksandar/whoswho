@@ -1,7 +1,7 @@
 {
   "name": "whoswho",
   "version": "1.0.0",
-  "description": "Party board for a heart-first send-off: invite, RSVP, matches, map and a TV",
+  "description": "Party board for Bring your own vibe: invite, RSVP, matches, map and a TV",
   "type": "module",
   "private": true,
   "main": "server.js",

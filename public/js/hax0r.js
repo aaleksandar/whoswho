@@ -21,7 +21,7 @@ function renderGuests() {
   const shown = [...guests]
     .reverse()
     .filter((g) => !q || [
-      g.name, g.about, g.need, g.offer, g.question, g.postcode, g.area, g.chapterNote,
+      g.name, g.about, g.need, g.offer, g.question, g.missing, g.hiddenSide, g.postcode, g.area, g.chapterNote,
       g.soundtrack, g.bringingText, g.vibeText, g.rsvp, ...(g.interests || []), ...(g.music || []),
       ...(g.chapter || []),
     ].some((v) => v && String(v).toLowerCase().includes(q)));
