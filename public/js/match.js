@@ -1,15 +1,16 @@
 // Deterministic, offline matching. No network.
-// Scores need↔offer complementarity, shared life chapter, interest and music
-// clusters (so "philosophy" meets "philosophical", "deep house" meets "house music"),
-// and neighbourhood proximity.
+// Scores shared communities (in + in, or in + curious), a need against what
+// someone offers or is already in, favourite spots that name the same place,
+// neighbourhood, and the older chapter / interest / music clusters.
 //
 // Night quests (not built yet) can reuse matchTags(guest): stable labels for
 // "find someone who's into X" without redoing this grouping.
 
 import { normalizeVibe } from './vibes.js';
 import {
-  AREAS, AREA_GROUPS, CHAPTERS, COMPLEMENTS,
+  AREAS, AREA_GROUPS, CHAPTERS, COMPLEMENTS, NEEDS,
 } from './catalog.js';
+import { communityLabel } from './communities.js';
 
 /** Cluster aliases. Short aliases (< 6 chars) only match the whole tag, so "music"
  *  does not swallow "house music", while "psychology" still catches "jungian psychology". */
@@ -280,6 +281,102 @@ function dedupe(list) {
   return out;
 }
 
+function membership(g) {
+  const inn = [];
+  const curious = [];
+  const map = g?.communities;
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return { inn, curious };
+  for (const [id, state] of Object.entries(map)) {
+    if (state === 'in') inn.push(id);
+    else if (state === 'curious') curious.push(id);
+  }
+  return { inn, curious };
+}
+
+function communityLink(a, b) {
+  const A = membership(a);
+  const B = membership(b);
+  const both = A.inn.filter((id) => B.inn.includes(id));
+  if (both.length) {
+    const labels = both.slice(0, 2).map(communityLabel);
+    return { kind: 'both', phrase: `you're both in ${joinAnd(labels)}`, labels, id: both[0] };
+  }
+  const intro = A.curious.find((id) => B.inn.includes(id));
+  if (intro) {
+    const label = communityLabel(intro);
+    const who = b?.name ? `${b.name} is` : "they're";
+    return { kind: 'curious', phrase: `${who} in ${label}, you're curious`, labels: [label], id: intro };
+  }
+  const host = A.inn.find((id) => B.curious.includes(id));
+  if (host) {
+    const label = communityLabel(host);
+    return { kind: 'curious', phrase: `you're in ${label}, they're curious`, labels: [label], id: host };
+  }
+  return null;
+}
+
+/** need id -> community ids that are a warm way in. */
+const NEED_COMMUNITIES = {
+  environment: ['hiking', 'gardens', 'lido', 'ponds', 'climate', 'sauna'],
+  inspiration: ['life-drawing', 'poetry', 'film', 'improv', 'photography', 'choir'],
+  job: ['founders', 'encode', 'tech-meetups'],
+  housemate: [],
+  love: [],
+  rest: ['yoga', 'meditation', 'sound-baths', 'reiki', 'sauna', 'sober'],
+  clarity: ['meditation', 'buddhist', 'long-now', 'philosophy'],
+  adventure: ['burning-man', 'hiking', 'raving', 'forest-ravers', 'psychedelic'],
+  collaborators: ['founders', 'encode', 'improv', 'tech-meetups', 'choir'],
+  support: ['reiki', 'womens-circles', 'mens-circles', 'neurodivergent', 'queer'],
+};
+
+function needWord(id) {
+  const label = NEEDS.find((item) => item.id === id)?.label || id;
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+function needCommunity(needer, giver, skipId) {
+  const needs = needer?.needTags || [];
+  const inn = membership(giver).inn;
+  for (const need of needs) {
+    if (need === 'community') continue;
+    const hit = (NEED_COMMUNITIES[need] || []).find((id) => inn.includes(id) && id !== skipId);
+    if (hit) return { phrase: `you want ${needWord(need)}, they're in ${communityLabel(hit)}`, id: hit };
+  }
+  return null;
+}
+
+const SPOT_STOP = new Set(['the', 'and', 'with', 'near', 'around', 'from', 'that', 'this', 'your', 'for', 'favourite', 'favorite', 'walk', 'walks', 'walking', 'coffee', 'little', 'best', 'just', 'very', 'into', 'of', 'in', 'on', 'to', 'my', 'at', 'its', 'a']);
+const SPOT_WEAK = new Set(['london', 'street', 'green', 'house', 'place', 'night', 'water', 'club', 'clubs', 'park', 'road', 'lane', 'hill', 'fields', 'cafe', 'bar']);
+
+function spotPhrases(text) {
+  const words = plain(text).split(/[^a-z0-9]+/).filter((word) => word && !SPOT_STOP.has(word));
+  const out = [];
+  for (let i = 0; i < words.length; i++) {
+    if (words[i].length >= 5 && !SPOT_WEAK.has(words[i])) out.push(words[i]);
+    if (i + 1 < words.length) {
+      const phrase = `${words[i]} ${words[i + 1]}`;
+      const bothWeak = SPOT_WEAK.has(words[i]) && SPOT_WEAK.has(words[i + 1]);
+      if (phrase.length >= 12 || (phrase.length >= 10 && !bothWeak)) out.push(phrase);
+    }
+  }
+  return out;
+}
+
+function spotLink(a, b) {
+  const shared = spotPhrases(a?.spot).filter((phrase) => spotPhrases(b?.spot).includes(phrase));
+  shared.sort((left, right) => right.length - left.length);
+  if (shared[0]) return { phrase: `you both love ${shared[0]}`, label: 'favourite spot' };
+  const areas = AREAS.filter((area) => area.id !== 'visiting');
+  const mentioned = areas.find((area) => {
+    const label = area.label.toLowerCase();
+    return plain(a?.spot).includes(label) && plain(b?.spot).includes(label);
+  });
+  if (mentioned) return { phrase: `your spots both sit around ${mentioned.label}`, label: 'favourite spot' };
+  const home = areas.find((area) => area.id === b?.areaChip && plain(a?.spot).includes(area.label.toLowerCase()));
+  if (home) return { phrase: `your spot is in their part of London`, label: 'favourite spot' };
+  return null;
+}
+
 /**
  * Score a against b. `reason` is written for a ("you need…, they have…").
  * `labels` are the short edge labels the TV graph groups by.
@@ -289,6 +386,9 @@ export function scorePair(a, b) {
   const music = share(musicList(a), musicList(b));
   const chapters = chapterShorts(a).filter((short) => chapterShorts(b).includes(short));
   const prox = proximity(a, b);
+  const community = communityLink(a, b);
+  const needComm = needCommunity(a, b, community?.id);
+  const spot = spotLink(a, b);
   const youNeed = complementLine(a, b);
   const theyNeed = complementLine(b, a);
   const complement = !!(youNeed || theyNeed);
@@ -297,6 +397,10 @@ export function scorePair(a, b) {
   const missCovered = miss && youNeed && miss.offerIds.includes(youNeed.offer);
 
   let score = 0;
+  if (community?.kind === 'both') score += 20;
+  else if (community) score += 16;
+  if (needComm) score += 14;
+  if (spot) score += 12;
   score += Math.min(28, interests.length * 12);
   score += Math.min(16, music.length * 10);
   if (chapters.length) score += 14;
@@ -307,6 +411,9 @@ export function scorePair(a, b) {
   score = Math.min(100, score);
 
   const labels = dedupe([
+    ...(community?.labels || []),
+    needComm ? 'need ↔ community' : null,
+    spot ? spot.label : null,
     ...chapters,
     ...interests.map((item) => item.label),
     ...music.map((item) => item.label),
@@ -322,6 +429,9 @@ export function scorePair(a, b) {
   ]).slice(0, 3);
 
   const bits = [];
+  if (community) bits.push(community.phrase);
+  if (needComm) bits.push(needComm.phrase);
+  if (spot) bits.push(spot.phrase);
   if (chapters[0]) bits.push(`both ${chapters[0]}`);
   if (into.length) bits.push(`into ${joinAnd(into)}`);
   if (prox.phrase) bits.push(prox.phrase);
@@ -329,7 +439,8 @@ export function scorePair(a, b) {
   else if (theyNeed) bits.push(theyNeed.theyNeed);
   if (miss && !missCovered) bits.push(miss.phrase);
   if (side) bits.push(side);
-  const reason = bits.join(', ');
+  // A community, a need, or a shared spot is the sentence. One extra clause is enough.
+  const reason = (community || needComm || spot ? bits.slice(0, 2) : bits).join(', ');
 
   return { score: reason ? score : 0, labels: reason ? labels : [], reason, complement };
 }
@@ -341,6 +452,7 @@ export function matchTags(g) {
   for (const item of explode(interestList(g))) push(item.label);
   for (const item of explode(musicList(g))) push(item.label);
   for (const short of chapterShorts(g)) push(short);
+  for (const id of [...membership(g).inn, ...membership(g).curious]) push(communityLabel(id));
   return tags;
 }
 

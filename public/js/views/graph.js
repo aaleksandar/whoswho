@@ -7,7 +7,8 @@
 import { h } from '../dom.js';
 import { avatarDataUri } from '../avatar.js';
 import { buildGraph, topVibes, matchTags } from '../graph-model.js';
-import { bringingSummary, chapterSummary, needSummary, offerSummary } from '../catalog.js';
+import { bringingSummary, needSummary, offerSummary } from '../catalog.js';
+import { communityLine } from '../communities.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const LABEL_LIMIT = 25; // edge labels only while it stays readable
@@ -324,10 +325,12 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
             g.area ? h('p.profile-area', `📍 ${g.area}`) : null,
             g.checkedIn ? h('p.profile-area', '● Here tonight') : null)),
         g.question ? h('p.profile-about', g.question) : (g.about ? h('p.profile-about', prettyText(g.about)) : null),
+        blurb('Favourite spot', g.spot),
+        blurb('This week', g.bright),
+        blurb('Needs', needSummary(g)),
+        blurb('Communities', communityLine(g)),
         blurb("What's missing", g.missing),
         blurb("A side that's been quiet", g.hiddenSide),
-        blurb('Chapter', chapterSummary(g)),
-        blurb('Needs', needSummary(g)),
         blurb('Can offer', offerSummary(g)),
         tags.length ? h('div.profile-vibes', tags.map((v) => vibeChip(v))) : null,
         blurb('Soundtrack', track),

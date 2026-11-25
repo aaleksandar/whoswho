@@ -26,7 +26,7 @@ test('clusters connect near-matches and leave exact tags alone', () => {
   assert.match(scored.reason, /east London/);
 
   const fit = scorePair(
-    { id: 1, needTags: ['home'], offerTags: [] },
+    { id: 1, needTags: ['housemate'], offerTags: [] },
     { id: 2, needTags: [], offerTags: ['spare-room'] },
   );
   assert.match(fit.reason, /spare room/);
@@ -50,6 +50,39 @@ test('what is missing lines up with what someone offers', () => {
   assert.match(scored.reason, /missing for you lines up/);
   assert.match(scored.reason, /spare room/);
   assert.ok(scored.labels.includes('missing ↔ offer'));
+});
+
+test('a community you are curious about is an intro', () => {
+  const scored = scorePair(
+    { id: 1, name: 'You', communities: { running: 'curious' } },
+    { id: 2, name: 'Maya', communities: { running: 'in' } },
+  );
+  assert.match(scored.reason, /Maya is in Running clubs, you're curious/);
+  assert.ok(scored.labels.includes('Running clubs'));
+
+  const both = scorePair(
+    { id: 1, name: 'A', communities: { running: 'in', parkrun: 'in' } },
+    { id: 2, name: 'B', communities: { running: 'in' } },
+  );
+  assert.match(both.reason, /you're both in Running clubs/);
+});
+
+test('a need lines up with a community someone is in', () => {
+  const scored = scorePair(
+    { id: 1, name: 'A', needTags: ['rest'] },
+    { id: 2, name: 'B', communities: { yoga: 'in' } },
+  );
+  assert.match(scored.reason, /you want rest, they're in Yoga/);
+  assert.ok(scored.labels.includes('need ↔ community'));
+});
+
+test('favourite spots that name the same place', () => {
+  const scored = scorePair(
+    { id: 1, spot: 'Victoria Park at dusk' },
+    { id: 2, spot: 'a lap of Victoria Park' },
+  );
+  assert.match(scored.reason, /victoria park/i);
+  assert.ok(scored.labels.includes('favourite spot'));
 });
 
 test('a hidden side is a reason when it meets theirs', () => {

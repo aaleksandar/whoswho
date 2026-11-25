@@ -3,8 +3,9 @@
 
 import { normalizeVibe } from './vibes.js';
 import {
-  LEAD, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS, RSVP,
+  LEAD, LIMITS, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS, RSVP,
 } from './catalog.js';
+import { allCommunities, cleanCommunities } from './communities.js';
 
 const ALIASES = {
   name: 'name',
@@ -33,6 +34,18 @@ const ALIASES = {
   london: 'areaChip',
   neighbourhood: 'areaChip',
   neighborhood: 'areaChip',
+  spot: 'spot',
+  favourite: 'spot',
+  favoritespot: 'spot',
+  favouritespot: 'spot',
+  bright: 'bright',
+  thisweek: 'bright',
+  positive: 'bright',
+  communities: 'communities',
+  communitiesin: 'communitiesIn',
+  imin: 'communitiesIn',
+  communitiescurious: 'communitiesCurious',
+  curious: 'communitiesCurious',
   postcode: 'postcode',
   outcode: 'postcode',
   bringingkind: 'bringingKind',
@@ -54,26 +67,28 @@ const ALIASES = {
 /** The prompt a guest pastes into their own chatbot. */
 export function aiPrompt() {
   const chips = [
-    ['chapter', CHAPTERS.map((c) => c.label)],
     ['needTags', NEEDS.map((c) => c.label)],
-    ['offerTags', OFFERS.map((c) => c.label)],
-    ['interests', INTERESTS],
-    ['music', MUSIC],
     ['area', AREAS.map((c) => c.label)],
-    ['bringingKind', FOOD.map((c) => c.label)],
-    ['vibeKind', BRING_VIBES.map((c) => c.label)],
+    ['communitiesIn or communitiesCurious', allCommunities().map((c) => c.label)],
     ['rsvp', ['going', 'maybe', 'no']],
   ];
   return [
-    'Help me fill in a card for a small Friday night called "Bring your own vibe".',
+    'Help me fill in a short card for a Friday night with friends, "Until I\'m back".',
     'Friday 27 November 2026, 7:30pm onwards, 8 Dereham Place, London EC2A 3HJ, Shoreditch.',
-    'It is co-created. Everyone brings something small and a piece of their own vibe. It is not networking and not about work.',
+    'It is a warm room, not networking. Keep the answers short.',
     '',
-    'The two questions that matter most:',
+    'Ask these, in order:',
+    `1. ${LEAD.spot}`,
+    `2. ${LEAD.bright}`,
+    `3. ${LEAD.area} Or that I am visiting.`,
+    `4. ${LEAD.need} Use the need chips. Anything that does not fit goes in "need".`,
+    `5. ${LEAD.communities} "communitiesIn" means I am in it. "communitiesCurious" means I want to try it. Use the names below. A community that is not listed can still be included, in my words.`,
+    '',
+    'Optional, only if I offer it:',
     `- ${LEAD.missing}`,
     `- ${LEAD.hiddenSide}`,
-    '',
-    'Also ask, briefly: the chapter or transition I am in, what I need, what I can offer someone, rabbit holes I would stay up talking about, a question I would love to explore tonight, the soundtrack on repeat (genres and 2 or 3 artists), where in London I am (or that I am visiting), and what I am bringing for the table and for the vibe of the room.',
+    '- A question I would love to ask someone tonight.',
+    '- A soundtrack on repeat.',
     '',
     'Interview me one question at a time, or, if you already know me, draft the answers and let me correct them. Do not invent a name I did not give you. Leave anything you are unsure about blank.',
     '',
@@ -81,32 +96,23 @@ export function aiPrompt() {
     '',
     '{',
     '  "name": "",',
-    '  "missing": "",',
-    '  "hiddenSide": "",',
-    '  "chapter": [],',
-    '  "chapterNote": "",',
-    '  "needTags": [],',
-    '  "need": "",',
-    '  "offerTags": [],',
-    '  "offer": "",',
-    '  "interests": [],',
-    '  "question": "",',
-    '  "music": [],',
-    '  "soundtrack": "",',
+    '  "spot": "",',
+    '  "bright": "",',
     '  "area": "",',
     '  "postcode": "",',
-    '  "bringingKind": "",',
-    '  "bringingText": "",',
-    '  "vibeKind": "",',
-    '  "vibeText": "",',
+    '  "needTags": [],',
+    '  "need": "",',
+    '  "communitiesIn": [],',
+    '  "communitiesCurious": [],',
+    '  "missing": "",',
+    '  "hiddenSide": "",',
+    '  "question": "",',
+    '  "soundtrack": "",',
     '  "rsvp": "going"',
     '}',
     '',
     'Allowed values for the chip fields (the closest match is fine):',
     chips.map(([key, values]) => `${key}: ${values.join(' | ')}`).join('\n'),
-    '',
-    `missing answers "${LEAD.missing}"`,
-    `hiddenSide answers "${LEAD.hiddenSide}"`,
   ].join('\n');
 }
 
@@ -114,6 +120,12 @@ function normKey(label) {
   const raw = String(label || '').toLowerCase().trim();
   if (/^what('?s| is) missing\b/.test(raw)) return 'missing';
   if (raw.startsWith('what side') || raw.startsWith('hidden side') || raw.startsWith('a side')) return 'hiddenSide';
+  if (/favourite|favorite/.test(raw) && /walk|bar|cafe|café|spot|place/.test(raw)) return 'spot';
+  if (raw === 'spot' || raw.startsWith('favourite spot') || raw.startsWith('favorite spot')) return 'spot';
+  if (/positive/.test(raw) || /this week/.test(raw)) return 'bright';
+  if (raw.startsWith('what do you need')) return 'needTags';
+  if (raw.includes('curious')) return 'communitiesCurious';
+  if (raw.startsWith('communities') || raw.startsWith("i'm in") || raw.startsWith('im in') || raw.startsWith('which communities')) return 'communitiesIn';
   if (raw.startsWith('rabbit')) return 'interests';
   if (raw.startsWith('chapter note') || raw.startsWith('in your words')) return 'chapterNote';
   const flat = raw.replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '');
@@ -282,6 +294,8 @@ function normalise(src) {
     if (value) out[key] = value;
   };
   put('name', 40);
+  put('spot', LIMITS.spot);
+  put('bright', LIMITS.bright);
   put('missing', 220);
   put('hiddenSide', 220);
   put('question', 180);
@@ -293,7 +307,7 @@ function normalise(src) {
   if (chapterNote) out.chapterNote = chapterNote;
 
   const needs = matchOptions(bag.needTags, NEEDS);
-  if (needs.ids.length) out.needTags = needs.ids.slice(0, 4);
+  if (needs.ids.length) out.needTags = needs.ids.slice(0, 5);
   const need = clip(joinBits([bag.need, ...needs.leftover]), 140);
   if (need) out.need = need;
 
@@ -311,6 +325,22 @@ function normalise(src) {
   if (music.ids.length) out.music = music.ids.slice(0, 6);
   const soundtrack = clip(joinBits([bag.soundtrack, ...music.leftover]), 160);
   if (soundtrack) out.soundtrack = soundtrack;
+
+  const communities = { ...cleanCommunities(bag.communities) };
+  const inn = matchOptions(bag.communitiesIn, allCommunities());
+  const curious = matchOptions(bag.communitiesCurious, allCommunities());
+  for (const id of inn.ids) if (!communities[id]) communities[id] = 'in';
+  for (const extra of inn.leftover) {
+    const custom = cleanCommunities({ [extra]: 'in' });
+    for (const [id, state] of Object.entries(custom)) if (!communities[id]) communities[id] = state;
+  }
+  for (const id of curious.ids) if (!communities[id]) communities[id] = 'curious';
+  for (const extra of curious.leftover) {
+    const custom = cleanCommunities({ [extra]: 'curious' });
+    for (const [id, state] of Object.entries(custom)) if (!communities[id]) communities[id] = state;
+  }
+  const capped = Object.fromEntries(Object.entries(communities).slice(0, 12));
+  if (Object.keys(capped).length) out.communities = capped;
 
   const area = matchOptions(bag.areaChip, AREAS);
   if (area.ids[0]) out.areaChip = area.ids[0];

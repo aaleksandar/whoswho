@@ -10,7 +10,7 @@ Phone pages for the people in the room, a TV for the wall.
 - **`/home`** is the TV. Graph, map, needs, bringing. The QR opens `/night`. RSVPs without a card count in the bringing tally and stay off the graph.
 - **`/hax0r`** is admin: edit or delete anyone, including the new fields, flip the views, reset the night. It also shows the door QR (`/night?door=1`), which checks in the phone that scans it.
 
-Matching is offline. It scores what's missing against what someone offers, a hidden side against shared interests, need against offer, shared chapter, interest and music clusters (`philosophy` meets `philosophical`, `deep house` meets `house music`), and neighbourhood. The TV graph uses those same edges. An optional LLM can rewrite the reason lines; the board works with the env vars unset.
+Matching is offline. It scores shared communities (both in, or one in and one curious), a need against what someone offers or is already part of, the same London area, favourite spots that name the same place, and the older interest and music clusters. The TV graph uses those same edges. An optional LLM can rewrite the reason lines; the board works with the env vars unset.
 
 `matchTags()` in `public/js/match.js` is the stable label list a later "night quests" feature can reuse.
 
@@ -78,7 +78,7 @@ fly deploy
 
 Then:
 
-1. Open `https://<your-app>.fly.dev/?invite=<INVITE_CODE>` on your phone. You should see "Bring your own vibe", not a password prompt.
+1. Open `https://<your-app>.fly.dev/?invite=<INVITE_CODE>` on your phone. You should see "Until I'm back", not a password prompt.
 2. RSVP, then "Introduce yourself", then you should land on `/night`.
 3. On the TV, open `https://<your-app>.fly.dev/home?invite=<INVITE_CODE>` once. The cookie sticks. Press **F**.
 4. Admin is `https://<your-app>.fly.dev/hax0r` (any username, `ADMIN_PASSWORD`). Print or screenshot the **door QR** on that page and put it by the door. Scanning it on a phone that already registered checks that person in.

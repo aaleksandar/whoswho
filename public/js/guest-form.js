@@ -7,6 +7,7 @@ import { normalizeVibe, MAX_VIBE_LEN } from './vibes.js';
 import {
   LIMITS, LEAD, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS,
 } from './catalog.js';
+import { COMMUNITY_GROUPS, communityLabel, canonCommunityId } from './communities.js';
 import { aiPrompt, parseAiAnswers } from './ai-fill.js';
 
 const MAX_INTERESTS = 12;
@@ -25,6 +26,9 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     avatar: initial ? normalizeAvatar(initial.avatar) : randomAvatar(),
     chapter: [...(initial?.chapter || [])],
     chapterNote: initial?.chapterNote || '',
+    spot: initial?.spot || '',
+    bright: initial?.bright || '',
+    communities: { ...(initial?.communities || {}) },
     missing: initial?.missing || '',
     hiddenSide: initial?.hiddenSide || '',
     needTags: [...(initial?.needTags || [])],
@@ -189,16 +193,23 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
     },
   }, '🔀 Shuffle');
 
-  // ---------------------------------------------------------------- the two lead questions
+  const spotInput = lineInput('gf-spot', 'spot', {
+    max: LIMITS.spot,
+    placeholder: 'A walk, a bar, a café',
+  });
+  const brightInput = lineInput('gf-bright', 'bright', {
+    max: LIMITS.bright,
+    placeholder: 'A text, a meal, a small win',
+  });
   const missingInput = areaInput('gf-missing', 'missing', {
     max: LIMITS.missing,
-    rows: 3,
-    placeholder: 'A person, a place, a kind of courage, a next step…',
+    rows: 2,
+    placeholder: 'A person, a place, a kind of courage…',
   });
   const hiddenInput = areaInput('gf-hidden', 'hiddenSide', {
     max: LIMITS.hiddenSide,
-    rows: 3,
-    placeholder: 'The part that has been quiet. A hobby, a voice, a way of being…',
+    rows: 2,
+    placeholder: 'A hobby, a voice, a way of being…',
   });
 
   // ---------------------------------------------------------------- fill with your AI
@@ -234,6 +245,9 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       if (input) input.value = value;
     };
     if (parsed.name) set('name', nameInput, parsed.name);
+    if (parsed.spot != null) set('spot', spotInput, parsed.spot);
+    if (parsed.bright != null) set('bright', brightInput, parsed.bright);
+    if (parsed.communities) { state.communities = { ...parsed.communities }; drawCommunities(); }
     if (parsed.missing != null) set('missing', missingInput, parsed.missing);
     if (parsed.hiddenSide != null) set('hiddenSide', hiddenInput, parsed.hiddenSide);
     if (parsed.chapter) { state.chapter = parsed.chapter; chapter.draw(); }
@@ -275,7 +289,7 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
 
   // ---------------------------------------------------------------- chapter / need / offer
   const chapter = multi('chapter', CHAPTERS, 3);
-  const needs = multi('needTags', NEEDS, 4);
+  const needs = multi('needTags', NEEDS, 5);
   const offers = multi('offerTags', OFFERS, 4);
 
   // ---------------------------------------------------------------- interests
@@ -389,7 +403,82 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
   const tallyTimer = setInterval(loadTally, 15000);
 
   const chapterNoteInput = areaInput('gf-chapter-note', 'chapterNote', { max: LIMITS.chapterNote, placeholder: 'In your words, if the chips miss it', rows: 2 });
-  const needInput = areaInput('gf-need-text', 'need', { max: LIMITS.need, placeholder: 'A spare room in Hackney, a clearer next step, someone to talk to…' });
+  const needInput = lineInput('gf-need-text', 'need', { max: LIMITS.need, placeholder: 'Or say it in a few words' });
+
+  let communityQuery = '';
+  const openGroups = new Set();
+  const communitySearch = h('input#gf-communities-search', {
+    type: 'search',
+    placeholder: 'Search',
+    autocomplete: 'off',
+    oninput: (e) => { communityQuery = e.target.value; drawCommunities(); },
+    onkeydown: (e) => { if (e.key === 'Enter') e.preventDefault(); },
+  });
+  const communityRoot = h('div.gf-communities');
+  const ownInput = h('input#gf-community-own', {
+    type: 'text',
+    maxLength: 40,
+    placeholder: 'Add your own',
+    autocomplete: 'off',
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); addOwn(); } },
+  });
+
+  function communityButton(id, label) {
+    const cur = state.communities[id] || '';
+    const cls = cur === 'in' ? 'button.gf-chip.on' : cur === 'curious' ? 'button.gf-chip.curious' : 'button.gf-chip';
+    const text = cur === 'in' ? `In · ${label}` : cur === 'curious' ? `Curious · ${label}` : `+ ${label}`;
+    return h(cls, {
+      type: 'button',
+      'aria-pressed': cur ? 'true' : 'false',
+      onclick: () => cycleCommunity(id),
+    }, text);
+  }
+
+  function cycleCommunity(id) {
+    const cur = state.communities[id];
+    if (cur === 'in') state.communities[id] = 'curious';
+    else if (cur === 'curious') delete state.communities[id];
+    else if (Object.keys(state.communities).length < 12) state.communities[id] = 'in';
+    drawCommunities();
+  }
+
+  function addOwn() {
+    const id = canonCommunityId(ownInput.value);
+    if (!id) return;
+    if (!state.communities[id] && Object.keys(state.communities).length >= 12) return;
+    if (!state.communities[id]) state.communities[id] = 'in';
+    ownInput.value = '';
+    communityQuery = '';
+    communitySearch.value = '';
+    drawCommunities();
+  }
+
+  function drawCommunities() {
+    const q = communityQuery.trim().toLowerCase();
+    const selected = Object.entries(state.communities);
+    const groups = COMMUNITY_GROUPS.map((group) => {
+      const items = group.items.filter((item) => !q || item.label.toLowerCase().includes(q) || item.id.includes(q));
+      if (!items.length) return null;
+      const count = group.items.filter((item) => state.communities[item.id]).length;
+      return h('details.gf-comm-group', {
+        open: !!q || openGroups.has(group.id),
+        ontoggle: (e) => {
+          if (q) return;
+          if (e.target.open) openGroups.add(group.id);
+          else openGroups.delete(group.id);
+        },
+      },
+      h('summary', count ? `${group.label} · ${count}` : group.label),
+      h('div.gf-vibe-suggestions', ...items.map((item) => communityButton(item.id, item.label))));
+    });
+    communityRoot.replaceChildren(
+      selected.length
+        ? h('div.gf-vibes-selected', ...selected.map(([id]) => communityButton(id, communityLabel(id))))
+        : null,
+      ...groups,
+    );
+  }
+  drawCommunities();
   const offerInput = areaInput('gf-offer-text', 'offer', { max: LIMITS.offer, placeholder: 'A Sunday roast, a spare sofa for a month, a long walk…' });
   const questionInput = lineInput('gf-question', 'question', { max: LIMITS.question, placeholder: 'What would you love to ask someone in this room?' });
   const soundtrackInput = lineInput('gf-soundtrack', 'soundtrack', { max: LIMITS.soundtrack, placeholder: '2 or 3 artists or tracks on repeat' });
@@ -429,12 +518,31 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       rsvp.el,
     ),
     h('section.gf-card.gf-lead',
-      h('label.gf-label', { for: 'gf-missing' }, LEAD.missing),
-      missingInput,
+      h('label.gf-label', { for: 'gf-spot' }, LEAD.spot),
+      spotInput,
+      h('p.gf-hint', 'One place is plenty.'),
     ),
     h('section.gf-card.gf-lead',
-      h('label.gf-label', { for: 'gf-hidden' }, LEAD.hiddenSide),
-      hiddenInput,
+      h('label.gf-label', { for: 'gf-bright' }, LEAD.bright),
+      brightInput,
+    ),
+    h('section.gf-card',
+      h('label.gf-label', { for: 'gf-postcode' }, LEAD.area),
+      pcWrap,
+      areas.el,
+    ),
+    h('section.gf-card',
+      h('div.gf-label', LEAD.need),
+      h('p.gf-hint', 'Tap any that fit.'),
+      needs.el,
+      needInput,
+    ),
+    h('section.gf-card',
+      h('div.gf-label', LEAD.communities),
+      h('p.gf-hint', "Tap once: I'm in. Tap again: curious."),
+      communitySearch,
+      communityRoot,
+      h('div.gf-vibe-input', ownInput, h('button.gf-add', { type: 'button', onclick: addOwn }, 'Add')),
     ),
     h('section.gf-card.gf-ai',
       h('div.gf-label', 'Fill it in with your AI'),
@@ -445,37 +553,34 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       aiPaste,
       h('button.land-btn', { type: 'button', onclick: applyAi }, 'Fill the form'),
     ),
-    h('section.gf-card.gf-avatar',
-      h('div.gf-label', 'Your spirit animal'),
+    h('details.gf-card.gf-more',
+      h('summary', 'More about you'),
+      h('p.gf-hint', 'Optional.'),
+      h('label.gf-label.gf-sub', { for: 'gf-missing' }, LEAD.missing),
+      missingInput,
+      h('label.gf-label.gf-sub', { for: 'gf-hidden' }, LEAD.hiddenSide),
+      hiddenInput,
+      h('label.gf-label.gf-sub', { for: 'gf-question' }, 'A question for tonight'),
+      questionInput,
+      h('div.gf-label.gf-sub', 'Soundtrack'),
+      music.el,
+      soundtrackInput,
+    ),
+    h('details.gf-card.gf-more',
+      h('summary', 'Spirit animal'),
       h('div.gf-preview-wrap', preview, shuffleBtn),
       dimBlocks.find((d) => d.dim.key === 'animal').el,
       h('details.gf-more', h('summary', 'Glasses, hat, colour'), ...dimBlocks.filter((d) => d.dim.key !== 'animal').map((d) => d.el)),
     ),
-    field('gf-chapter', 'Chapter', chapter.el),
-    h('section.gf-card', chapterNoteInput),
-    field('gf-need', 'Need', needs.el),
-    h('section.gf-card', needInput),
-    field('gf-offer', 'Offer', offers.el),
-    h('section.gf-card', offerInput),
-    h('section.gf-card',
-      h('label.gf-label', { for: 'gf-interest' }, 'Into'),
-      interestBox,
-      h('div.gf-vibe-input', interestInput, h('button.gf-add', { type: 'button', onclick: addInterest }, 'Add')),
-      interestSuggest,
-    ),
-    h('section.gf-card',
-      h('label.gf-label', { for: 'gf-question' }, 'A question'),
-      questionInput,
-    ),
-    h('section.gf-card',
-      h('div.gf-label', 'Soundtrack'),
-      music.el,
-      soundtrackInput,
-    ),
-    h('section.gf-card',
-      h('label.gf-label', { for: 'gf-postcode' }, 'London'),
-      pcWrap,
-      areas.el,
+    h('details.gf-card.gf-more',
+      h('summary', 'Bringing something?'),
+      h('div.gf-label.gf-sub', 'For the table'),
+      food.el,
+      bringInput,
+      h('div.gf-label.gf-sub', 'Vibe'),
+      vibeBring.el,
+      vibeInput,
+      tally,
     ),
     h('details.gf-card.gf-more',
       h('summary', 'Links'),
@@ -484,15 +589,6 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       h('label.gf-inline', 'Substack ', linkInputs.substack),
       h('label.gf-inline', 'A site ', linkInputs.site),
       h('label.gf-check', consent, h('span', 'Show these on my card.')),
-    ),
-    h('section.gf-card',
-      h('div.gf-label', 'For the table'),
-      food.el,
-      bringInput,
-      h('div.gf-label.gf-sub', 'Vibe'),
-      vibeBring.el,
-      vibeInput,
-      tally,
     ),
     errorBox,
     h('div.gf-actions',
@@ -507,6 +603,9 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
       name: state.name.trim(),
       rsvp: state.rsvp || 'going',
       avatar: state.avatar,
+      spot: state.spot.trim(),
+      bright: state.bright.trim(),
+      communities: { ...state.communities },
       chapter: state.chapter,
       chapterNote: state.chapterNote.trim(),
       missing: state.missing.trim(),

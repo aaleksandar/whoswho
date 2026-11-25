@@ -69,8 +69,26 @@ test('a v4 database keeps its guests and gains has_card', () => {
   const kept = db.listGuests().find((g) => g.name === 'Kept');
   assert.ok(kept);
   assert.equal(kept.hasCard, true);
+  assert.equal(kept.spot, null);
+  assert.equal(kept.bright, null);
+  assert.deepEqual(kept.communities, {});
+  assert.equal(kept.interests[0], 'poetry');
   assert.equal(db.getSettings().title, "Until I'm back");
-  assert.equal(db.listGuests().length, 1);
+  const made = db.createGuest({
+    name: 'New',
+    spot: 'Victoria Park',
+    bright: 'a good coffee',
+    needTags: ['rest', 'home'],
+    communities: { running: 'in', choir: 'curious', nope: 'nope' },
+  });
+  assert.equal(made.spot, 'Victoria Park');
+  assert.equal(made.bright, 'a good coffee');
+  assert.deepEqual(made.needTags, ['rest', 'housemate']);
+  assert.equal(made.communities.running, 'in');
+  assert.equal(made.communities.choir, 'curious');
+  assert.equal(made.communities.nope, undefined);
+  assert.equal(db.listGuests().length, 2);
+  assert.equal(db.getGuest(kept.id).name, 'Kept');
   db.close();
 });
 

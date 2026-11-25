@@ -7,8 +7,9 @@ import { normalizeVibes } from '../public/js/vibes.js';
 import { resolveLocation, jitter } from './postcode.js';
 import { EVENT } from './event.js';
 import {
-  LIMITS, CHAPTERS, NEEDS, OFFERS, FOOD, BRING_VIBES, AREAS, RSVP, cleanIds,
+  LIMITS, CHAPTERS, NEEDS, OFFERS, FOOD, BRING_VIBES, AREAS, RSVP, cleanIds, mapNeedIds,
 } from '../public/js/catalog.js';
+import { cleanCommunities } from '../public/js/communities.js';
 
 export { LIMITS };
 export const VIEW_IDS = ['graph', 'map', 'needs', 'bringing'];
@@ -71,6 +72,10 @@ const MIGRATIONS = [
   `ALTER TABLE guests ADD COLUMN has_card INTEGER NOT NULL DEFAULT 1;
    UPDATE settings SET value = '"Until I''m back"'
      WHERE key = 'title' AND value IN ('"Bring your own vibe"', '"Aleksandar''s send-off"');`,
+  // v6: the short card. Additive only. Old answers stay on the row.
+  `ALTER TABLE guests ADD COLUMN spot TEXT;
+   ALTER TABLE guests ADD COLUMN bright TEXT;
+   ALTER TABLE guests ADD COLUMN communities TEXT NOT NULL DEFAULT '{}';`,
 ];
 
 export class ValidationError extends Error {
@@ -145,7 +150,10 @@ export function cleanGuestInput(input) {
     postcodeInput: areaChip === 'visiting' ? '' : (typeof src.postcode === 'string' ? src.postcode : ''),
     chapter: cleanIds(src.chapter, CHAPTERS, 3),
     chapterNote: cleanText(src.chapterNote, LIMITS.chapterNote) || null,
-    needTags: cleanIds(src.needTags, NEEDS, 4),
+    needTags: cleanIds(mapNeedIds(src.needTags), NEEDS, 5),
+    spot: cleanText(src.spot, LIMITS.spot) || null,
+    bright: cleanText(src.bright, LIMITS.bright) || null,
+    communities: cleanCommunities(src.communities),
     offer: cleanText(src.offer, LIMITS.offer) || null,
     offerTags: cleanIds(src.offerTags, OFFERS, 4),
     music: normalizeVibes(src.music, 8),
@@ -193,7 +201,10 @@ function rowToGuest(r) {
     updatedAt: r.updated_at,
     chapter: parseJson(r.chapter, []),
     chapterNote: r.chapter_note,
-    needTags: parseJson(r.need_tags, []),
+    needTags: cleanIds(mapNeedIds(parseJson(r.need_tags, [])), NEEDS, 5),
+    spot: r.spot || null,
+    bright: r.bright || null,
+    communities: cleanCommunities(parseJson(r.communities, {})),
     offer: r.offer,
     offerTags: parseJson(r.offer_tags, []),
     music: parseJson(r.music, []),
@@ -251,14 +262,15 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       `INSERT INTO guests (
          name, avatar, vibes, need, about, chapter, chapter_note, need_tags, offer, offer_tags,
          music, soundtrack, question, missing, hidden_side, links, links_consent,
-         bringing_kind, bringing_text, vibe_kind, vibe_text, rsvp, has_card, token_hash
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         bringing_kind, bringing_text, vibe_kind, vibe_text, rsvp, spot, bright, communities, has_card, token_hash
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     update: db.prepare(
       `UPDATE guests SET name = ?, avatar = ?, vibes = ?, need = ?, about = ?, chapter = ?, chapter_note = ?,
          need_tags = ?, offer = ?, offer_tags = ?, music = ?, soundtrack = ?, question = ?,
          missing = ?, hidden_side = ?, links = ?,
          links_consent = ?, bringing_kind = ?, bringing_text = ?, vibe_kind = ?, vibe_text = ?, rsvp = ?,
+         spot = ?, bright = ?, communities = ?,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
     ),
     setLoc: db.prepare('UPDATE guests SET postcode = ?, area = ?, lat = ?, lng = ?, area_chip = ? WHERE id = ?'),
@@ -348,6 +360,9 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     c.vibeKind,
     c.vibeText,
     c.rsvp,
+    c.spot,
+    c.bright,
+    JSON.stringify(c.communities || {}),
   ];
 
   return {

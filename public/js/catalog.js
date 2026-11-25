@@ -2,12 +2,19 @@
 // Night-quest prompts can reuse these ids and labels later; nothing here is work-flavoured.
 
 export const LEAD = Object.freeze({
+  spot: "Where's your favourite walk, bar, or café in London?",
+  bright: "What's the most positive thing that happened to you this week?",
+  area: 'Which area of London do you live in?',
+  need: 'What do you need in life right now?',
+  communities: 'Which communities are you in, or want to explore?',
   missing: "What's missing in your life right now?",
   hiddenSide: "What side of you haven't you got to show in a while?",
 });
 
 export const LIMITS = {
   name: 40,
+  spot: 80,
+  bright: 140,
   need: 140,
   offer: 140,
   about: 500,
@@ -30,14 +37,35 @@ export const CHAPTERS = [
 ];
 
 export const NEEDS = [
-  { id: 'home', label: 'A place / housemate' },
+  { id: 'environment', label: 'A change of environment' },
+  { id: 'inspiration', label: 'Inspiration' },
+  { id: 'job', label: 'A job' },
+  { id: 'community', label: 'A community' },
+  { id: 'housemate', label: 'A housemate / flat' },
+  { id: 'love', label: 'Love' },
+  { id: 'rest', label: 'Rest' },
   { id: 'clarity', label: 'Clarity' },
+  { id: 'adventure', label: 'Adventure' },
+  { id: 'collaborators', label: 'Creative collaborators' },
   { id: 'support', label: 'Emotional support' },
-  { id: 'partner', label: 'A partner' },
-  { id: 'collaborators', label: 'Collaborators' },
-  { id: 'next', label: 'A next step' },
-  { id: 'accountability', label: 'Accountability' },
 ];
+
+/** Older cards used these ids. Reading them still means the same thing. */
+export const NEED_ALIAS = {
+  home: 'housemate',
+  partner: 'love',
+};
+
+export function mapNeedIds(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const id of list) {
+    if (typeof id !== 'string') continue;
+    const next = NEED_ALIAS[id] || id;
+    if (!out.includes(next)) out.push(next);
+  }
+  return out;
+}
 
 export const OFFERS = [
   { id: 'spare-room', label: 'A spare room or sofa' },
@@ -53,17 +81,23 @@ export const OFFERS = [
 
 /** need id -> offer id. Directional copy is from the person who has the need. */
 export const COMPLEMENTS = [
-  { need: 'home', offer: 'spare-room', youNeed: 'you need a place, they have a spare room or sofa', theyNeed: 'they need a place, you have a spare room or sofa' },
-  { need: 'home', offer: 'local', youNeed: 'you need a place, they know the neighbourhood', theyNeed: 'they need a place, you know the neighbourhood' },
+  { need: 'housemate', offer: 'spare-room', youNeed: 'you need a place, they have a spare room or sofa', theyNeed: 'they need a place, you have a spare room or sofa' },
+  { need: 'housemate', offer: 'local', youNeed: 'you need a place, they know the neighbourhood', theyNeed: 'they need a place, you know the neighbourhood' },
   { need: 'clarity', offer: 'ear', youNeed: 'you want clarity, they can listen', theyNeed: 'they want clarity, you can listen' },
   { need: 'clarity', offer: 'questions', youNeed: 'you want clarity, they have good questions', theyNeed: 'they want clarity, you have good questions' },
   { need: 'clarity', offer: 'walk', youNeed: 'you want clarity, they will walk with you', theyNeed: 'they want clarity, you will walk with them' },
   { need: 'support', offer: 'ear', youNeed: 'you could use support, they can listen', theyNeed: 'they could use support, you can listen' },
   { need: 'support', offer: 'walk', youNeed: 'you could use support, they will walk with you', theyNeed: 'they could use support, you will walk with them' },
   { need: 'collaborators', offer: 'collab', youNeed: 'you want collaborators, they want to make something', theyNeed: 'they want collaborators, you want to make something' },
-  { need: 'next', offer: 'collab', youNeed: 'you want a next step, they like making things with people', theyNeed: 'they want a next step, you like making things with people' },
-  { need: 'next', offer: 'intro', youNeed: 'you want a next step, they can introduce you', theyNeed: 'they want a next step, you can introduce them' },
-  { need: 'accountability', offer: 'accountability', youNeed: 'you both do accountability', theyNeed: 'you both do accountability' },
+  { need: 'inspiration', offer: 'questions', youNeed: 'you want inspiration, they have good questions', theyNeed: 'they want inspiration, you have good questions' },
+  { need: 'inspiration', offer: 'collab', youNeed: 'you want inspiration, they want to make something', theyNeed: 'they want inspiration, you want to make something' },
+  { need: 'rest', offer: 'walk', youNeed: 'you want rest, they will walk with you', theyNeed: 'they want rest, you will walk with them' },
+  { need: 'environment', offer: 'walk', youNeed: 'you want a change of scene, they will walk with you', theyNeed: 'they want a change of scene, you will walk with them' },
+  { need: 'environment', offer: 'local', youNeed: 'you want a change of scene, they know the neighbourhood', theyNeed: 'they want a change of scene, you know the neighbourhood' },
+  { need: 'adventure', offer: 'walk', youNeed: 'you want adventure, they will walk with you', theyNeed: 'they want adventure, you will walk with them' },
+  { need: 'job', offer: 'intro', youNeed: 'you want a job, they can introduce you', theyNeed: 'they want a job, you can introduce them' },
+  { need: 'community', offer: 'intro', youNeed: 'you want a community, they can introduce you', theyNeed: 'they want a community, you can introduce them' },
+  { need: 'love', offer: 'ear', youNeed: 'you want love, they can listen', theyNeed: 'they want love, you can listen' },
 ];
 
 export const INTERESTS = [
@@ -154,10 +188,13 @@ export function needSummary(g) {
   return parts.join(' · ');
 }
 
-/** The needs board prefers the lead "what's missing" answer, then the chips. */
+/** The needs board shows the life-need chips, then a written need, then the older "what's missing" line. */
 export function missingLine(g) {
+  const chips = labelsFor(NEEDS, g?.needTags);
+  if (chips.length) return chips.join(' · ');
+  if (g?.need) return g.need;
   if (g?.missing) return g.missing;
-  return needSummary(g);
+  return '';
 }
 
 export function offerSummary(g) {

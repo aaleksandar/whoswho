@@ -10,7 +10,7 @@ const MIN_PAGE_SECONDS = 8;
 export function createNeedsView(root) {
   const grid = h('div.needs-grid');
   const dots = h('div.needs-dots');
-  root.append(h('h2.needs-title', "What's missing right now?"), grid, dots);
+  root.append(h('h2.needs-title', 'What do you need?'), grid, dots);
 
   let items = [];
   let pages = [[]];

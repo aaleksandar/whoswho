@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import { aiPrompt, matchOptions, parseAiAnswers } from '../public/js/ai-fill.js';
 import { FOOD, MUSIC } from '../public/js/catalog.js';
 
-test('the prompt names both lead questions and the json keys', () => {
+test('the prompt names the short card questions and the json keys', () => {
   const prompt = aiPrompt();
-  assert.match(prompt, /What's missing in your life right now/);
-  assert.match(prompt, /haven't you got to show/);
+  assert.match(prompt, /favourite walk, bar, or café/);
+  assert.match(prompt, /most positive thing/);
+  assert.match(prompt, /communitiesIn/);
+  assert.match(prompt, /communitiesCurious/);
+  assert.match(prompt, /Running clubs/);
+  assert.match(prompt, /Encode Club/);
+  assert.match(prompt, /Shibari/);
   assert.match(prompt, /Interview me/);
-  assert.match(prompt, /"hiddenSide"/);
-  assert.match(prompt, /"missing"/);
-  assert.match(prompt, /Bring your own vibe/);
+  assert.match(prompt, /Until I'm back/);
 });
 
 test('json in a fence, with prose around it, fills chips and free text', () => {
@@ -56,6 +59,23 @@ test('json in a fence, with prose around it, fills chips and free text', () => {
   assert.equal(parsed.rsvp, 'going');
   assert.equal(parsed.links.instagram, '@robin');
   assert.equal(parsed.nonsense, undefined);
+});
+
+test('new card fields parse, including in versus curious', () => {
+  const parsed = parseAiAnswers(`{
+    "spot": "Columbia Road",
+    "bright": "a text from an old friend",
+    "needTags": ["Rest", "a pony"],
+    "communitiesIn": ["Running clubs", "Hackney choir"],
+    "communitiesCurious": ["Shibari"]
+  }`);
+  assert.equal(parsed.spot, 'Columbia Road');
+  assert.match(parsed.bright, /old friend/);
+  assert.deepEqual(parsed.needTags, ['rest']);
+  assert.match(parsed.need, /pony/);
+  assert.equal(parsed.communities.running, 'in');
+  assert.equal(parsed.communities.shibari, 'curious');
+  assert.equal(parsed.communities['hackney choir'], 'in');
 });
 
 test('labelled lines work, and missing fields stay missing', () => {

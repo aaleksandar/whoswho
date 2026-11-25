@@ -38,10 +38,33 @@ loadEnvFile();
 const db = openDb();
 if (clear) console.log(`cleared ${db.deleteAllGuests()} guests`);
 
+const CARD = {
+  Maya: { spot: 'Victoria Park', bright: 'a long run with nobody talking about work', needTags: ['rest', 'community'], communities: { running: 'in', parkrun: 'in', choir: 'curious' } },
+  Leo: { spot: 'a pint at The Cock Tavern', bright: 'the new keys actually worked', needTags: ['housemate', 'collaborators'], communities: { jazz: 'in', 'supper-clubs': 'curious', techno: 'in' } },
+  Noor: { spot: 'the Marshes when it is quiet', bright: 'a poem I read out loud to one person', needTags: ['support', 'love'], communities: { poetry: 'in', queer: 'in', ecstatic: 'curious' } },
+  Jonah: { spot: 'a cafe table in Stoke Newington', bright: 'finished a book I had been avoiding', needTags: ['collaborators', 'community'], communities: { 'book-clubs': 'in', choir: 'curious', chess: 'in' } },
+  Aisha: { spot: 'any kitchen that will have me', bright: 'a stranger shared their umbrella', needTags: ['housemate', 'adventure'], communities: { salsa: 'curious', 'supper-clubs': 'in', language: 'in' } },
+  Sam: { spot: 'the towpath at golden hour', bright: 'I showed someone a painting', needTags: ['inspiration', 'support'], communities: { 'life-drawing': 'in', photography: 'curious' } },
+  Priya: { spot: 'Brockwell Lido', bright: 'a morning with my phone in the other room', needTags: ['rest', 'clarity'], communities: { yoga: 'in', meditation: 'in', lido: 'curious' } },
+  Chris: { spot: 'a walk across Clapham Common', bright: 'laughed until I cried, in a good way', needTags: ['love', 'support'], communities: { film: 'in', queer: 'curious', comedy: 'in' } },
+  Hana: { spot: 'Walthamstow Wetlands', bright: 'a houseplant survived the move', needTags: ['housemate', 'environment'], communities: { gardens: 'in', hiking: 'curious' } },
+  Omar: { spot: 'a corner of Brick Lane', bright: 'a conversation that did not rush', needTags: ['clarity', 'community'], communities: { 'long-now': 'in', techno: 'in', psychedelic: 'curious' } },
+  Freya: { spot: 'a lap of Victoria Park', bright: 'someone actually showed up', needTags: ['community', 'adventure'], communities: { hiking: 'in', running: 'curious', parkrun: 'curious' } },
+  Ben: { spot: 'the river path in Deptford', bright: 'a chorus that finally landed', needTags: ['collaborators', 'inspiration'], communities: { choir: 'in', jazz: 'curious', founders: 'in' } },
+  Laila: { spot: 'Greenwich Park before anyone else', bright: 'I did the morning sit', needTags: ['rest', 'clarity'], communities: { meditation: 'in', buddhist: 'in', 'sound-baths': 'curious' } },
+  Theo: { spot: 'London Fields Lido', bright: 'someone saved me a seat', needTags: ['clarity', 'community'], communities: { lido: 'in', running: 'curious', philosophy: 'in' } },
+  Nina: { spot: 'a bakery in Stratford', bright: 'the cake came out of the tin in one piece', needTags: ['community', 'housemate'], communities: { 'supper-clubs': 'curious', film: 'in', language: 'in' } },
+  Ellis: { spot: 'the bandstand on the Common', bright: 'a kind text from an old friend', needTags: ['support', 'love'], communities: { 'life-drawing': 'curious', queer: 'in', hiking: 'in' } },
+  Yasmin: { spot: 'a stoop in Tottenham', bright: 'a Tuesday that was not a bar', needTags: ['collaborators', 'community'], communities: { poetry: 'in', raving: 'in', 'tech-meetups': 'curious' } },
+  Paul: { spot: 'the ponds on the Heath', bright: 'an hour with no plan', needTags: ['rest', 'environment'], communities: { ponds: 'in', hiking: 'in', chess: 'curious' } },
+  Rosa: { spot: 'Columbia Road on a Sunday', bright: 'I took a bad photo on purpose and loved it', needTags: ['inspiration', 'collaborators'], communities: { photography: 'in', 'natural-wine': 'curious', film: 'in' } },
+  Aleksandar: { spot: 'the canal behind the station', bright: 'this room, already', needTags: ['community', 'clarity'], communities: { founders: 'in', 'long-now': 'curious', encode: 'in', raving: 'in' } },
+};
+
 let firstToken = null;
 for (const person of PEOPLE) {
   const { here, ...input } = person;
-  const created = db.createGuest({ ...input, avatar: randomAvatar(), rsvp: input.rsvp || 'going' });
+  const created = db.createGuest({ ...input, ...(CARD[person.name] || {}), avatar: randomAvatar(), rsvp: input.rsvp || 'going' });
   if (here) db.setCheckedIn(created.id, true);
   if (!firstToken) firstToken = { name: created.name, id: created.id, editToken: created.editToken };
 }

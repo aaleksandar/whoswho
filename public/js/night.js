@@ -3,7 +3,8 @@
 import { h, $ } from './dom.js';
 import { api } from './api.js';
 import { avatarDataUri } from './avatar.js';
-import { NEEDS, OFFERS, FOOD, BRING_VIBES, needSummary, offerSummary, bringingSummary } from './catalog.js';
+import { NEEDS, OFFERS, FOOD, BRING_VIBES, needSummary, bringingSummary } from './catalog.js';
+import { communityLabel, communityLine } from './communities.js';
 import { loadMe, personalPath, rememberFromLocation } from './me-store.js';
 
 rememberFromLocation();
@@ -69,7 +70,7 @@ function matchesBlock(matches) {
       h('div',
         h('div.night-name', row.guest.name, row.checkedIn ? h('span.night-pill', 'Here') : null),
         h('p.night-reason', row.reason),
-        row.guest.hiddenSide ? h('p.night-q', row.guest.hiddenSide) : null,
+        row.guest.bright ? h('p.night-q', `This week: ${row.guest.bright}`) : null,
         row.guest.question ? h('p.night-q', `“${row.guest.question}”`) : null,
       ),
     ))),
@@ -78,6 +79,7 @@ function matchesBlock(matches) {
 
 function icebreaker(list) {
   const deck = list.flatMap((g) => [
+    g.bright ? { g, kind: 'week', text: g.bright } : null,
     g.question ? { g, kind: 'question', text: g.question } : null,
     g.hiddenSide ? { g, kind: 'side', text: g.hiddenSide } : null,
   ].filter(Boolean));
@@ -88,7 +90,11 @@ function icebreaker(list) {
     const item = deck[i % deck.length];
     card.replaceChildren(
       personFace(item.g, 56),
-      h('p.night-ask', item.kind === 'side' ? `${item.g.name} hasn't shown this in a while` : `${item.g.name} asks`),
+      h('p.night-ask', item.kind === 'week'
+        ? `${item.g.name}'s week`
+        : item.kind === 'side'
+          ? `${item.g.name} hasn't shown this in a while`
+          : `${item.g.name} asks`),
       h('blockquote', item.text),
     );
   };
@@ -104,8 +110,10 @@ function icebreaker(list) {
 }
 
 function passes(g, filter) {
-  if (filter.q && !`${g.name} ${g.question || ''} ${g.missing || ''} ${g.hiddenSide || ''} ${g.area || ''}`.toLowerCase().includes(filter.q)) return false;
+  const hay = `${g.name} ${g.question || ''} ${g.missing || ''} ${g.hiddenSide || ''} ${g.area || ''} ${g.spot || ''} ${g.bright || ''} ${communityLine(g)}`.toLowerCase();
+  if (filter.q && !hay.includes(filter.q)) return false;
   if (filter.area && (g.area || '') !== filter.area) return false;
+  if (filter.community && !(g.communities && g.communities[filter.community])) return false;
   if (filter.need && !(g.needTags || []).includes(filter.need)) return false;
   if (filter.offer && !(g.offerTags || []).includes(filter.offer)) return false;
   if (filter.interest && !(g.interests || g.vibes || []).includes(filter.interest)) return false;
@@ -115,10 +123,11 @@ function passes(g, filter) {
 }
 
 function directory() {
-  const filter = { q: '', area: '', need: '', offer: '', interest: '', bringing: '' };
+  const filter = { q: '', area: '', community: '', need: '', offer: '', interest: '', bringing: '' };
   const list = h('div.night-dir');
   const areas = [...new Set(guests.map((g) => g.area).filter(Boolean))].sort();
   const interests = [...new Set(guests.flatMap((g) => g.interests || []))].sort();
+  const communities = [...new Set(guests.flatMap((g) => Object.keys(g.communities || {})))].sort((a, b) => communityLabel(a).localeCompare(communityLabel(b)));
 
   function draw() {
     const shown = guests.filter((g) => g.id !== me?.id && passes(g, filter));
@@ -142,6 +151,7 @@ function directory() {
     }),
     h('div.night-filters',
       select('area', 'Area', areas.map((id) => ({ id, label: id }))),
+      select('community', 'Community', communities.map((id) => ({ id, label: communityLabel(id) }))),
       select('need', 'Needs', NEEDS.filter((n) => guests.some((g) => (g.needTags || []).includes(n.id)))),
       select('offer', 'Offers', OFFERS.filter((n) => guests.some((g) => (g.offerTags || []).includes(n.id)))),
       select('interest', 'Into', interests.map((id) => ({ id, label: id }))),
@@ -156,13 +166,13 @@ function directory() {
 
 function dirCard(g) {
   const bring = bringingSummary(g);
-  const bits = [g.area, needSummary(g) && `needs ${needSummary(g)}`, offerSummary(g) && `offers ${offerSummary(g)}`].filter(Boolean);
+  const bits = [g.area, g.spot, needSummary(g) && `needs ${needSummary(g)}`, communityLine(g)].filter(Boolean);
   return h('article.night-person',
     personFace(g, 56),
     h('div',
       h('div.night-name', g.name, g.checkedIn ? h('span.night-pill', 'Here') : null),
       bits.length ? h('p', bits.join(' · ')) : null,
-      g.missing ? h('p.night-q', g.missing) : null,
+      g.bright ? h('p.night-q', `This week: ${g.bright}`) : null,
       g.hiddenSide ? h('p', g.hiddenSide) : null,
       g.question ? h('p.night-q', g.question) : null,
       (bring.food || bring.vibe) ? h('p', [bring.food, bring.vibe].filter(Boolean).join(' / ')) : null,
