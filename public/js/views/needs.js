@@ -3,13 +3,14 @@
 
 import { h, hash01 } from '../dom.js';
 import { avatarDataUri } from '../avatar.js';
+import { missingLine } from '../catalog.js';
 
 const MIN_PAGE_SECONDS = 8;
 
 export function createNeedsView(root) {
   const grid = h('div.needs-grid');
   const dots = h('div.needs-dots');
-  root.append(h('h2.needs-title', 'What do you need in life?'), grid, dots);
+  root.append(h('h2.needs-title', 'What do you need?'), grid, dots);
 
   let items = [];
   let pages = [[]];
@@ -79,10 +80,10 @@ export function createNeedsView(root) {
   }
 
   return {
-    hasData: (gs) => gs.some((g) => g.need),
+    hasData: (gs) => gs.some((g) => missingLine(g)),
     duration: (base) => Math.max(base, pages.length * MIN_PAGE_SECONDS),
     update(gs) {
-      const next = gs.filter((g) => g.need).sort((a, b) => b.id - a.id);
+      const next = gs.map((g) => ({ ...g, need: missingLine(g) })).filter((g) => g.need).sort((a, b) => b.id - a.id);
       const key = JSON.stringify(next.map((g) => [g.id, g.name, g.need, g.avatar]));
       if (key === itemsKey) return; // nothing on this board changed
       itemsKey = key;

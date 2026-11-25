@@ -1,0 +1,145 @@
+.land-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 16px 64px;
+}
+
+.land-kicker {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.land-title,
+.land-main h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(3.2rem, 14vw, 5rem);
+  letter-spacing: 0.03em;
+  line-height: 0.9;
+  margin: 6px 0 12px;
+  color: #fff;
+  -webkit-text-stroke: 2.5px var(--ink);
+  text-shadow: 5px 5px 0 var(--ink);
+  transform: rotate(-1.5deg);
+}
+
+.land-hook {
+  font-size: 1.15rem;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: 0 0 18px;
+}
+
+.land-themes {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.land-q {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.6rem, 6vw, 2.1rem);
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  margin: 0 0 8px;
+}
+
+.land-main > .gf-card {
+  margin-top: 14px;
+}
+
+.land-note {
+  font-size: 0.92rem;
+  line-height: 1.4;
+  margin: 8px 0 0;
+  font-weight: 800;
+}
+
+.land-tight {
+  margin-top: 14px;
+}
+
+.land-examples {
+  margin: 8px 0 0;
+  font-weight: 750;
+}
+
+.land-more {
+  margin-top: 4px;
+}
+
+.land-more summary {
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.land-code {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.land-code input {
+  flex: 1;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  background: var(--paper);
+}
+
+.land-sub {
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  font-size: 2rem;
+  margin: 0 0 8px;
+}
+
+.land-when {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.land-bring + .land-bring {
+  margin-top: 12px;
+}
+
+.land-bring p,
+.gf-card p {
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.land-counts {
+  font-weight: 800;
+  color: var(--pink);
+  margin: 0 0 10px;
+}
+
+.land-foot {
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 8px 0 0;
+}
+
+.land form {
+  display: grid;
+  gap: 10px;
+}
+
+.land form input[type='text'] {
+  width: 100%;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  background: var(--paper);
+}

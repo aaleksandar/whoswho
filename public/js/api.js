@@ -1,9 +1,12 @@
 // Fetch helpers + live updates over Server-Sent Events.
 
-export async function api(method, url, body) {
+export async function api(method, url, body, headers) {
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    headers: {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(headers || {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 204) return null;
@@ -12,6 +15,7 @@ export async function api(method, url, body) {
     const err = new Error(data.error || `Request failed (${res.status})`);
     err.field = data.field;
     err.status = res.status;
+    err.code = data.code;
     throw err;
   }
   return data;

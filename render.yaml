@@ -1,0 +1,24 @@
+# Render blueprint. A persistent disk needs a paid instance (free web services have no disk,
+# so the SQLite file would vanish on restart). Set the secret env vars in the dashboard.
+
+services:
+  - type: web
+    name: whoswho
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/event
+    envVars:
+      - key: DB_PATH
+        value: /var/data/whoswho.sqlite
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: INVITE_CODE
+        sync: false
+      - key: PLAYLIST_URL
+        sync: false
+    disk:
+      name: whoswho-data
+      mountPath: /var/data
+      sizeGB: 1

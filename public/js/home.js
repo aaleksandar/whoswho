@@ -6,25 +6,28 @@ import { avatarDataUri } from './avatar.js';
 import { createGraphView } from './views/graph.js';
 import { createMapView } from './views/map.js';
 import { createNeedsView } from './views/needs.js';
+import { createBringingView } from './views/bringing.js';
 
-const LABELS = { graph: 'Connections', map: 'Map', needs: 'Needs' };
+const LABELS = { graph: 'Connections', map: 'Map', needs: 'Needs', bringing: 'Tonight' };
 const views = {
   graph: createGraphView($('#view-graph'), { onInteract: () => restartTimer('graph') }),
   map: createMapView($('#view-map'), { onInteract: () => restartTimer('map') }),
   needs: createNeedsView($('#view-needs')),
+  bringing: createBringingView($('#view-bringing')),
 };
 const sections = Object.fromEntries([...document.querySelectorAll('.view')].map((el) => [el.dataset.view, el]));
 const bar = $('#progress');
 
 let guests = [];
-let settings = { title: "Who's here?", rotateSeconds: 20, views: ['graph', 'map', 'needs'] };
+let bringingPeople = [];
+let settings = { title: "Until I'm back", rotateSeconds: 20, views: ['graph', 'map', 'needs', 'bringing'] };
 let current = null;
 let startedAt = 0;
 let duration = 0;
 let pausedAt = null;
 
 const mod = (n, m) => ((n % m) + m) % m;
-const available = () => settings.views.filter((id) => views[id].hasData(guests));
+const available = () => settings.views.filter((id) => views[id].hasData(id === 'bringing' ? bringingPeople : guests));
 
 function nextId(dir) {
   const list = available();
@@ -97,7 +100,7 @@ function renderTabs() {
 
 function renderCount() {
   $('#count').textContent = guests.length;
-  $('#count-label').textContent = guests.length === 1 ? 'person here' : 'people here';
+  $('#count-label').textContent = guests.length === 1 ? 'person' : 'people';
 }
 
 function welcome(guest) {
@@ -111,9 +114,14 @@ function welcome(guest) {
 }
 
 async function loadGuests(event) {
-  guests = await api('GET', '/api/guests');
+  const [cards, everyone] = await Promise.all([
+    api('GET', '/api/guests'),
+    api('GET', '/api/guests?all=1'),
+  ]);
+  guests = cards.filter((g) => g.rsvp !== 'no' && g.hasCard !== false);
+  bringingPeople = everyone.filter((g) => g.rsvp !== 'no');
   renderCount();
-  for (const v of Object.values(views)) v.update(guests);
+  for (const [id, view] of Object.entries(views)) view.update(id === 'bringing' ? bringingPeople : guests);
   if (event?.type === 'created' && event.guest) {
     welcome(event.guest);
     for (const v of Object.values(views)) v.highlight?.(event.guest.id);
@@ -135,7 +143,7 @@ function applySettings(s) {
 
 async function loadInfo() {
   const info = await api('GET', '/api/info');
-  const short = info.hiUrl.replace(/^https?:\/\//, '');
+  const short = (info.nightUrl || info.joinUrl).replace(/^https?:\/\//, '');
   document.querySelectorAll('.hi-url').forEach((el) => { el.textContent = short; });
   document.querySelectorAll('img[src^="/api/qr.svg"]').forEach((img) => { img.src = `/api/qr.svg?t=${Date.now()}`; });
 }

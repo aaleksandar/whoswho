@@ -6,7 +6,9 @@
 
 import { h } from '../dom.js';
 import { avatarDataUri } from '../avatar.js';
-import { buildGraph, topVibes } from '../graph-model.js';
+import { buildGraph, topVibes, matchTags } from '../graph-model.js';
+import { bringingSummary, needSummary, offerSummary } from '../catalog.js';
+import { communityLine } from '../communities.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const LABEL_LIMIT = 25; // edge labels only while it stays readable
@@ -31,7 +33,7 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
 
   const side = h('aside.graph-side.panel');
   const legend = h('div.graph-legend.panel',
-    h('span.legend-line'), ' shared vibe', h('span.dot-sep', '·'), 'closer = more in common',
+    h('span.legend-line'), ' a real thread', h('span.dot-sep', '·'), 'closer = more in common',
     h('span.dot-sep', '·'), 'tap a face or a line');
   root.append(side, legend);
 
@@ -82,9 +84,12 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
     const { x: gx, y: gy } = groupCentre();
     sim
       .force('link', d3.forceLink(links).id((d) => d.id)
-        .distance((l) => 2 * r + 200 / (l.shared.length + 0.4))
+        .distance((l) => {
+          const closeness = Math.min(1, (l.score || (18 + 10 * l.shared.length)) / 100);
+          return 2 * r + 40 + 260 * (1 - closeness);
+        })
         .strength((l) => {
-          const s = Math.min(1, 0.12 + 0.22 * l.shared.length);
+          const s = Math.min(1, 0.1 + (l.score || 24) / 200);
           return members && !(members.has(idOf(l.source)) && members.has(idOf(l.target))) ? s * 0.25 : s;
         }))
       .force('charge', d3.forceManyBody().strength(-r * 15).distanceMax(Math.max(W, H) * 0.6))
@@ -99,9 +104,7 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
   // ----------------------------------------------------------- selection
   function setSelection(next, { user = true } = {}) {
     selection = next;
-    members = selection?.type === 'vibe'
-      ? new Set(guests.filter((g) => g.vibes.includes(selection.vibe)).map((g) => g.id))
-      : null;
+    members = selection?.type === 'vibe' ? membersFor(selection.vibe) : null;
     renderSide();
     measure();
     configureForces();
@@ -109,6 +112,18 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
     renderGroup();
     if (visible) sim.alpha(Math.max(sim.alpha(), user ? 0.8 : 0.4)).restart();
     if (user) onInteract();
+  }
+
+  function membersFor(vibe) {
+    const tagged = guests.filter((g) => matchTags(g).includes(vibe)).map((g) => g.id);
+    if (tagged.length) return new Set(tagged);
+    const ids = new Set();
+    for (const l of links) {
+      if (!l.shared?.includes(vibe)) continue;
+      ids.add(idOf(l.source));
+      ids.add(idOf(l.target));
+    }
+    return ids;
   }
 
   const selectPerson = (id) => setSelection({ type: 'person', id });
@@ -162,7 +177,7 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
     // Keep what's selected if it still exists after a live update.
     const stale =
       (selection?.type === 'person' && !byId.has(selection.id)) ||
-      (selection?.type === 'vibe' && !gs.some((g) => g.vibes.includes(selection.vibe)));
+      (selection?.type === 'vibe' && !gs.some((g) => matchTags(g).includes(selection.vibe)) && !links.some((l) => l.shared.includes(selection.vibe)));
     setSelection(stale ? null : selection, { user: false });
     if (visible) sim.alpha(Math.max(sim.alpha(), 0.6)).restart();
     else sim.alpha(0.6);
@@ -191,9 +206,9 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
         return line;
       })
       .select('title')
-      .text((d) => d.shared.join(' · '));
+      .text((d) => d.reason || d.shared.join(' · '));
 
-    const showLabels = nodes.length <= LABEL_LIMIT;
+    const showLabels = links.length > 0 && links.length <= LABEL_LIMIT;
     gLabels.selectAll('text')
       .data(showLabels ? links : [], (d) => d.key)
       .join('text')
@@ -218,6 +233,7 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
         setTimeout(() => g.classed('entering', false), 50);
         return g;
       });
+    sel.classed('here', (d) => !!d.checkedIn);
     sel.select('circle.halo').attr('r', r + 10);
     sel.select('circle.ring').attr('r', r + 3);
     sel.select('image')
@@ -276,7 +292,7 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
     const max = top[0]?.count || 1;
     const linkCount = links.length;
     fillSide(
-      h('h3', 'Top vibes'),
+      h('h3', 'In the room'),
       h('ol.vibe-list',
         top.length
           ? top.map(({ vibe, count }) =>
@@ -289,7 +305,16 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
     );
   }
 
+  function blurb(label, text) {
+    return text ? h('div.profile-need', h('small', label), h('p', text)) : null;
+  }
+
   function renderProfile(g) {
+    if (!g) return fillSide(closeBtn());
+    const tags = matchTags(g);
+    const bring = bringingSummary(g);
+    const bringing = [bring.food, bring.vibe].filter(Boolean).join(' / ');
+    const track = [ ...(g.music || []), g.soundtrack ].filter(Boolean).join(' · ');
     fillSide(
       closeBtn(),
       h('div.profile',
@@ -297,10 +322,19 @@ export function createGraphView(root, { onInteract = () => {} } = {}) {
           h('img.avatar-img.profile-avatar', { src: avatarDataUri(g.avatar), alt: '' }),
           h('div',
             h('h3.profile-name', g.name),
-            g.area ? h('p.profile-area', `📍 ${g.area}`) : null)),
-        g.about ? h('p.profile-about', prettyText(g.about)) : null,
-        g.vibes.length ? h('div.profile-vibes', g.vibes.map((v) => vibeChip(v))) : null,
-        g.need ? h('div.profile-need', h('small', 'Needs in life'), h('p', g.need)) : null,
+            g.area ? h('p.profile-area', `📍 ${g.area}`) : null,
+            g.checkedIn ? h('p.profile-area', '● Here tonight') : null)),
+        g.question ? h('p.profile-about', g.question) : (g.about ? h('p.profile-about', prettyText(g.about)) : null),
+        blurb('Favourite spot', g.spot),
+        blurb('This week', g.bright),
+        blurb('Needs', needSummary(g)),
+        blurb('Communities', communityLine(g)),
+        blurb("What's missing", g.missing),
+        blurb("A side that's been quiet", g.hiddenSide),
+        blurb('Can offer', offerSummary(g)),
+        tags.length ? h('div.profile-vibes', tags.map((v) => vibeChip(v))) : null,
+        blurb('Soundtrack', track),
+        blurb('Bringing', bringing),
       ),
     );
   }

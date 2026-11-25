@@ -4,6 +4,7 @@ import { h, $ } from './dom.js';
 import { api, live } from './api.js';
 import { avatarDataUri } from './avatar.js';
 import { mountGuestForm } from './guest-form.js';
+import { bringingSummary, chapterSummary, needSummary, offerSummary } from './catalog.js';
 
 let guests = [];
 let confirmingId = null;
@@ -15,32 +16,39 @@ async function loadGuests() {
   renderGuests();
 }
 
-const fmtTime = (iso) => {
-  const d = new Date(iso);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay
-    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-};
-
 function renderGuests() {
   const q = $('#filter').value.trim().toLowerCase();
   const shown = [...guests]
     .reverse()
-    .filter((g) => !q || [g.name, g.about, g.need, g.postcode, g.area, ...g.vibes].some((v) => v && v.toLowerCase().includes(q)));
+    .filter((g) => !q || [
+      g.name, g.about, g.need, g.offer, g.question, g.missing, g.hiddenSide, g.postcode, g.area, g.chapterNote,
+      g.soundtrack, g.bringingText, g.vibeText, g.rsvp, ...(g.interests || []), ...(g.music || []),
+      ...(g.chapter || []),
+    ].some((v) => v && String(v).toLowerCase().includes(q)));
   $('#guest-count').textContent = guests.length;
   $('#empty').hidden = guests.length > 0;
   $('#guest-rows').replaceChildren(
     ...shown.map((g) =>
       h('tr', { dataset: { id: g.id } },
         h('td', h('img.avatar-img', { src: avatarDataUri(g.avatar), alt: '', width: 44, height: 44 })),
-        h('td.ad-name', g.name, g.about ? h('small.ad-about', { title: g.about }, g.about) : null),
-        h('td', h('div.ad-vibes', g.vibes.map((v) => h('span.ad-vibe', v)))),
-        h('td.ad-need', g.need || h('span.ad-dim', '—')),
+        h('td.ad-name',
+          g.name,
+          h('small.ad-about', [g.rsvp || 'going', g.checkedIn ? 'here' : ''].filter(Boolean).join(' · ')),
+          g.question ? h('small.ad-about', { title: g.question }, g.question) : null,
+        ),
+        h('td', chapterSummary(g) || h('span.ad-dim', '—')),
+        h('td.ad-need',
+          needSummary(g) || h('span.ad-dim', '—'),
+          offerSummary(g) ? h('small.ad-about', offerSummary(g)) : null,
+        ),
+        h('td', (() => {
+          const b = bringingSummary(g);
+          const text = [b.food, b.vibe].filter(Boolean).join(' / ');
+          return text || h('span.ad-dim', '—');
+        })()),
         h('td.ad-loc',
-          g.postcode ? h('span', g.postcode) : h('span.ad-dim', '—'),
-          g.postcode ? h('small', g.area || 'not on map') : null),
-        h('td.ad-dim', fmtTime(g.createdAt)),
+          g.area ? h('span', g.area) : h('span.ad-dim', '—'),
+          g.postcode ? h('small', g.postcode) : null),
         h('td.ad-actions',
           confirmingId === g.id
             ? [
@@ -147,7 +155,14 @@ async function loadInfo() {
   const row = (label, url) =>
     [h('dt', label), h('dd', h('a', { href: url, target: '_blank' }, url),
       h('button.ad-btn.small', { type: 'button', onclick: (e) => copy(url, e.target) }, 'Copy'))];
-  $('#urls').replaceChildren(...row('Display', info.homeUrl), ...row('Register', info.hiUrl), ...row('Admin', info.adminUrl));
+  $('#urls').replaceChildren(
+    ...row('Invite', info.joinUrl || info.base + '/'),
+    ...row('Register', info.hiUrl),
+    ...row('Tonight', info.nightUrl),
+    ...row('Door check-in', info.doorUrl),
+    ...row('Display', info.homeUrl),
+    ...row('Admin', info.adminUrl),
+  );
 }
 
 async function copy(text, btn) {
