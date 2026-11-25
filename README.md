@@ -1,13 +1,13 @@
 # whoswho
 
-A guest board for a small party. "Bring your own vibe": Friday 27 November 2026, 7:30pm, 8 Dereham Place, London EC2A 3HJ. Aleksandar is hosting, the weekend before he heads to Vietnam.
+A guest board for Abu's friends. Until he's back: Friday 27 November 2026, 7:30pm+, 8 Dereham Place, London EC2A 3HJ.
 
 Phone pages for the people in the room, a TV for the wall.
 
-- **`/`** is the invite. Time, place, why this night exists, what to bring, and an RSVP. Edit the words in `src/event.js`.
-- **`/hi`** is the card. It leads with what's missing and the side of you that has been quiet, then chapter, need, offer, rabbit holes, a question, a soundtrack, a London area, optional links (only with a ticked consent box), and what you are bringing. "Fill it in with your AI" copies the questions and can pre-fill a reply you paste back. Nothing submits until you do. Most of it is optional. This phone stores an edit token so you can change or delete the card at `/me`.
-- **`/night`** is the page for the night: check in, your top matches with a one-line reason, a filterable directory, an icebreaker deck drawn from people's own questions, and the shared playlist.
-- **`/home`** is the TV. It rotates a connection graph, a London map, a needs board, and what people are bringing. A QR code points at the invite.
+- **`/`** is the invite. Who, when, what to bring, RSVP. No profile yet. Edit the words in `src/event.js`.
+- **`/hi`** is the card, filled at the party. Same phone that RSVP'd opens it directly. Another phone picks the name off the RSVP list. "Fill it in with your AI" copies the questions and pre-fills a reply. Nothing submits until Done.
+- **`/night`** is the page for the night: build your card, check in, matches, directory, icebreakers, playlist.
+- **`/home`** is the TV. Graph, map, needs, bringing. The QR opens `/night`. RSVPs without a card count in the bringing tally and stay off the graph.
 - **`/hax0r`** is admin: edit or delete anyone, including the new fields, flip the views, reset the night. It also shows the door QR (`/night?door=1`), which checks in the phone that scans it.
 
 Matching is offline. It scores what's missing against what someone offers, a hidden side against shared interests, need against offer, shared chapter, interest and music clusters (`philosophy` meets `philosophical`, `deep house` meets `house music`), and neighbourhood. The TV graph uses those same edges. An optional LLM can rewrite the reason lines; the board works with the env vars unset.

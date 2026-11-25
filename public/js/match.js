@@ -352,7 +352,7 @@ export function rankMatches(viewer, guests, { limit = 5 } = {}) {
   const scored = [];
   for (const guest of guests) {
     if (!guest || guest.id === viewer.id) continue;
-    if (guest.rsvp === 'no') continue;
+    if (guest.rsvp === 'no' || guest.hasCard === false) continue;
     const scoredPair = scorePair(viewer, guest);
     if (!scoredPair.reason || scoredPair.score <= 0) continue;
     scored.push({

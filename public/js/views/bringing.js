@@ -9,7 +9,7 @@ const MIN_PAGE_SECONDS = 8;
 export function createBringingView(root) {
   const grid = h('div.needs-grid');
   const dots = h('div.needs-dots');
-  root.append(h('h2.needs-title', "On the table & in the room"), grid, dots);
+  root.append(h('h2.needs-title', 'Bringing'), grid, dots);
 
   let items = [];
   let pages = [[]];

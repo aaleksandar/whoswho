@@ -2,7 +2,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomBytes } from 'node:crypto';
-import { normalizeAvatar } from '../public/js/avatar.js';
+import { normalizeAvatar, randomAvatar } from '../public/js/avatar.js';
 import { normalizeVibes } from '../public/js/vibes.js';
 import { resolveLocation, jitter } from './postcode.js';
 import { EVENT } from './event.js';
@@ -67,6 +67,10 @@ const MIGRATIONS = [
    ALTER TABLE guests ADD COLUMN hidden_side TEXT;
    UPDATE settings SET value = '"Bring your own vibe"'
      WHERE key = 'title' AND value = '"Aleksandar''s send-off"';`,
+  // v5: RSVP can exist without a profile. Existing rows are already cards.
+  `ALTER TABLE guests ADD COLUMN has_card INTEGER NOT NULL DEFAULT 1;
+   UPDATE settings SET value = '"Until I''m back"'
+     WHERE key = 'title' AND value IN ('"Bring your own vibe"', '"Aleksandar''s send-off"');`,
 ];
 
 export class ValidationError extends Error {
@@ -205,6 +209,7 @@ function rowToGuest(r) {
     vibeKind: r.vibe_kind,
     vibeText: r.vibe_text,
     rsvp: r.rsvp,
+    hasCard: r.has_card == null ? true : !!r.has_card,
     checkedIn: !!r.checked_in,
     checkedInAt: r.checked_in_at,
   };
@@ -246,8 +251,8 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       `INSERT INTO guests (
          name, avatar, vibes, need, about, chapter, chapter_note, need_tags, offer, offer_tags,
          music, soundtrack, question, missing, hidden_side, links, links_consent,
-         bringing_kind, bringing_text, vibe_kind, vibe_text, rsvp, token_hash
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         bringing_kind, bringing_text, vibe_kind, vibe_text, rsvp, has_card, token_hash
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ),
     update: db.prepare(
       `UPDATE guests SET name = ?, avatar = ?, vibes = ?, need = ?, about = ?, chapter = ?, chapter_note = ?,
@@ -265,6 +270,16 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     settingsAll: db.prepare('SELECT key, value FROM settings'),
     settingsPut: db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    ),
+    byName: db.prepare('SELECT * FROM guests WHERE lower(name) = lower(?) ORDER BY id'),
+    setToken: db.prepare('UPDATE guests SET token_hash = ? WHERE id = ?'),
+    setCard: db.prepare('UPDATE guests SET has_card = ? WHERE id = ?'),
+    setComing: db.prepare(
+      `UPDATE guests SET name = ?, rsvp = ?, bringing_kind = ?, bringing_text = ?, vibe_kind = ?, vibe_text = ?,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+    ),
+    setStatus: db.prepare(
+      `UPDATE guests SET name = ?, rsvp = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
     ),
     rsvpDel: db.prepare('DELETE FROM rsvps WHERE lower(name) = lower(?)'),
     rsvpIns: db.prepare('INSERT INTO rsvps (name, status) VALUES (?, ?)'),
@@ -357,7 +372,18 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       const editToken = opts.token || newEditToken();
       return tx(() => {
         const about = c.about ?? null;
-        const { lastInsertRowid } = q.insert.run(...pack({ ...c, about }), hashToken(editToken));
+        const stub = q.byName.all(c.name).map(rowToGuest).find((g) => !g.hasCard);
+        if (stub) {
+          q.update.run(...pack({ ...c, about }), stub.id);
+          q.setCard.run(1, stub.id);
+          q.setToken.run(hashToken(editToken), stub.id);
+          applyLocation(stub.id, c.postcodeInput, c.areaChip);
+          rememberRsvp(c.name, c.rsvp);
+          return { ...rowToGuest(q.get.get(stub.id)), editToken };
+        }
+        const named = q.byName.all(c.name).map(rowToGuest).find((g) => g.hasCard);
+        if (named) throw new ValidationError('That name already has a card. Use the phone that made it.', 'name');
+        const { lastInsertRowid } = q.insert.run(...pack({ ...c, about }), 1, hashToken(editToken));
         const id = Number(lastInsertRowid);
         applyLocation(id, c.postcodeInput, c.areaChip);
         rememberRsvp(c.name, c.rsvp);
@@ -372,6 +398,7 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
         if (!existing) return null;
         const about = c.about === undefined ? existing.about : c.about;
         q.update.run(...pack({ ...c, about }), id);
+        q.setCard.run(1, id);
         applyLocation(id, c.postcodeInput, c.areaChip);
         if (existing.name && existing.name.toLowerCase() !== c.name.toLowerCase()) q.rsvpDel.run(existing.name);
         rememberRsvp(c.name, c.rsvp);
@@ -397,15 +424,60 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     },
 
     addRsvp(input) {
-      const name = cleanText(input?.name, LIMITS.name);
-      if (!name) throw new ValidationError('Name is required', 'name');
-      const status = input?.status;
+      return this.upsertRsvp(input);
+    },
+
+    /**
+     * RSVP without a profile. Same name updates the existing person.
+     * A new name gets a cardless guest and a one-time edit token for this phone.
+     */
+    upsertRsvp(input) {
+      const src = input && typeof input === 'object' ? input : {};
+      const status = src.status || src.rsvp;
       if (!RSVP.includes(status)) throw new ValidationError('Pick going, maybe, or can\'t make it', 'status');
-      tx(() => {
-        q.rsvpDel.run(name);
-        q.rsvpIns.run(name, status);
+      const c = cleanGuestInput({
+        name: src.name,
+        rsvp: src.status || src.rsvp,
+        bringingKind: src.bringingKind,
+        bringingText: src.bringingText,
+        vibeKind: src.vibeKind,
+        vibeText: src.vibeText,
       });
-      return { name, status, counts: this.rsvpCounts() };
+      const bringingTouched = [src.bringingKind, src.bringingText, src.vibeKind, src.vibeText]
+        .some((v) => typeof v === 'string' && v.trim());
+      return tx(() => {
+        const rows = q.byName.all(c.name).map(rowToGuest);
+        const existing = rows.find((g) => g.hasCard) || rows.find((g) => !g.hasCard);
+        if (existing) {
+          if (bringingTouched) q.setComing.run(c.name, c.rsvp, c.bringingKind, c.bringingText, c.vibeKind, c.vibeText, existing.id);
+          else q.setStatus.run(c.name, c.rsvp, existing.id);
+          rememberRsvp(c.name, c.rsvp);
+          return { name: c.name, status: c.rsvp, counts: this.rsvpCounts(), guestId: existing.id, hasCard: existing.hasCard };
+        }
+        const editToken = newEditToken();
+        const avatar = randomAvatar();
+        const { lastInsertRowid } = q.insert.run(...pack({ ...c, about: null, avatar }), 0, hashToken(editToken));
+        const id = Number(lastInsertRowid);
+        rememberRsvp(c.name, c.rsvp);
+        return { name: c.name, status: c.rsvp, counts: this.rsvpCounts(), guestId: id, hasCard: false, editToken };
+      });
+    },
+
+    openRsvps() {
+      return this.listGuests()
+        .filter((g) => !g.hasCard && g.rsvp !== 'no')
+        .map((g) => ({ id: g.id, name: g.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    claimGuest(id) {
+      const existing = q.get.get(id);
+      if (!existing) return null;
+      const guest = rowToGuest(existing);
+      if (guest.hasCard) return null;
+      const editToken = newEditToken();
+      q.setToken.run(hashToken(editToken), id);
+      return { ...rowToGuest(q.get.get(id)), editToken };
     },
 
     rsvpCounts() {

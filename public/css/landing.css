@@ -53,11 +53,43 @@
 }
 
 .land-note {
-  text-align: center;
   font-size: 0.92rem;
   line-height: 1.4;
-  margin: 16px 12px 2px;
-  color: var(--ink);
+  margin: 8px 0 0;
+  font-weight: 800;
+}
+
+.land-tight {
+  margin-top: 14px;
+}
+
+.land-examples {
+  margin: 8px 0 0;
+  font-weight: 750;
+}
+
+.land-more {
+  margin-top: 4px;
+}
+
+.land-more summary {
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.land-code {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.land-code input {
+  flex: 1;
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  background: var(--paper);
 }
 
 .land-sub {

@@ -44,22 +44,26 @@ function checkinButton() {
   }, here ? "You're here" : "I'm here");
 }
 
+function cardLink() {
+  const door = params.get('door') ? '?door=1' : '';
+  return h('a.land-btn', { href: `/hi${door}` }, 'Build your card');
+}
+
 function matchesBlock(matches) {
-  if (!loadMe()?.token) {
+  if (!me?.hasCard) {
     return h('section.night-block',
-      h('h2', 'People you should meet'),
-      h('p', 'Register on this phone and your top few show up here, with a reason.'),
-      h('a.land-btn', { href: '/hi' }, 'Introduce yourself'),
+      h('h2', 'Your card'),
+      cardLink(),
     );
   }
   if (!matches?.length) {
     return h('section.night-block',
-      h('h2', 'People you should meet'),
-      h('p', 'Once a few more cards are in, your people show up here.'),
+      h('h2', 'Meet'),
+      h('p', 'Nobody yet.'),
     );
   }
   return h('section.night-block',
-    h('h2', 'People you should meet'),
+    h('h2', 'Meet'),
     h('ol.night-matches', matches.map((row) => h('li.night-match',
       personFace(row.guest, 72),
       h('div',
@@ -90,7 +94,7 @@ function icebreaker(list) {
   };
   draw();
   return h('section.night-block',
-    h('h2', 'Borrow a question'),
+    h('h2', 'Ask'),
     card,
     h('button.land-btn.ghost', {
       type: 'button',
@@ -130,7 +134,7 @@ function directory() {
 
   draw();
   return h('section.night-block',
-    h('h2', 'The room'),
+    h('h2', 'People'),
     h('input.night-search', {
       type: 'search',
       placeholder: 'Search names',
@@ -180,27 +184,22 @@ function render(matches) {
       h('p.land-kicker', event?.kicker || 'Tonight'),
       h('h1', event?.title || 'Tonight'),
       h('p', `${event?.when || ''} · ${event?.neighbourhood || ''}`.replace(/^ · | · $/g, '')),
-      h('p.night-count', `${guests.length} on the board${hereCount ? ` · ${hereCount} here` : ''}`),
-      checkinButton(),
-      params.get('welcome') ? h('p.night-welcome', `You're on the board${me?.name ? `, ${me.name}` : ''}. This phone remembers you.`) : null,
-      params.get('saved') ? h('p.night-welcome', 'Saved.') : null,
-      params.get('door') && me?.checkedIn ? h('p.night-welcome', 'Checked in at the door.') : null,
+      h('p.night-count', `${guests.length} cards${hereCount ? ` · ${hereCount} here` : ''}`),
+      me?.hasCard ? checkinButton() : null,
+      params.get('welcome') ? h('p.night-welcome', 'Saved.') : null,
+      params.get('door') && me?.checkedIn ? h('p.night-welcome', "You're here.") : null,
     ),
     matchesBlock(matches),
     event?.playlistUrl
       ? h('section.night-block',
         h('h2', event.playlistLabel || 'Playlist'),
-        h('a.land-btn', { href: event.playlistUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open the shared playlist'),
-        h('p.gf-hint', 'Add a song if you want. No Spotify login in this app.'),
+        h('a.land-btn', { href: event.playlistUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Playlist'),
       )
-      : h('section.night-block',
-        h('h2', 'Playlist'),
-        h('p', 'The shared playlist link is not up yet. It will show up here once it is set.'),
-      ),
+      : null,
     icebreaker(guests) || '',
     directory(),
     h('p.night-foot',
-      token ? h('a', { href: '/me' }, 'Edit your card') : h('a', { href: '/hi' }, 'Register'),
+      token && me?.hasCard ? h('a', { href: '/me' }, 'Edit') : h('a', { href: '/hi' }, 'Your card'),
       ' · ',
       token ? h('a', { href: personalPath(token, '/me') }, 'Personal link') : null,
     ),
@@ -214,7 +213,11 @@ async function boot() {
   if (loadMe()?.token) {
     try { me = await api('GET', '/api/me', undefined, authHeaders()); } catch { me = null; }
   }
-  if (params.get('door') && loadMe()?.token && me && !me.checkedIn) {
+  if (params.get('door') && me && !me.hasCard) {
+    location.replace('/hi?door=1');
+    return;
+  }
+  if (params.get('door') && loadMe()?.token && me?.hasCard && !me.checkedIn) {
     try {
       me = { ...me, ...(await api('POST', '/api/me/checkin', { here: true }, authHeaders())) };
     } catch { /* stay on the page */ }
@@ -224,9 +227,8 @@ async function boot() {
   } catch (err) {
     if (err.code === 'invite') {
       main.replaceChildren(h('section.gf-card',
-        h('h2', 'Invite first'),
-        h('p', 'This page has people\'s answers on it. Open the invite link, then come back.'),
-        h('a.land-btn', { href: `/?next=${encodeURIComponent('/night' + location.search)}` }, 'Enter the invite'),
+        h('h2', 'Invite'),
+        h('a.land-btn', { href: `/?next=${encodeURIComponent('/night' + location.search)}` }, 'Code'),
       ));
       return;
     }

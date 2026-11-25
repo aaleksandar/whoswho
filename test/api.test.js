@@ -166,21 +166,28 @@ describe('party board', () => {
     assert.equal(info.nightUrl, 'https://party.example.com/night');
     assert.equal(info.doorUrl, 'https://party.example.com/night?door=1');
     const event = (await s.call('GET', '/api/event')).json;
-    assert.equal(event.title, 'Bring your own vibe');
-    assert.match(event.hook, /vibe/i);
-    assert.doesNotMatch(event.hook, /Aleksandar/);
-    assert.match(event.footnote, /Vietnam/);
-    assert.ok(event.themes.some((theme) => /missing/i.test(theme.q)));
-    assert.ok(event.themes.some((theme) => /side of you/i.test(theme.q)));
+    assert.equal(event.title, "Until I'm back");
+    assert.match(event.kicker, /Abu/);
+    assert.match(event.hook, /Vietnam/);
+    assert.equal(event.themes, undefined);
+    assert.equal(event.intent, undefined);
     assert.equal(event.place, '8 Dereham Place, London EC2A 3HJ');
     assert.equal(event.playlistUrl, 'https://example.com/playlist');
     assert.equal(event.gated, false);
   });
 
   test('RSVP, self-edit token, check-in, matches, bringing, postcode privacy', async () => {
-    const rsvp = await s.call('POST', '/api/rsvp', { name: 'Ada', status: 'going' });
+    const rsvp = await s.call('POST', '/api/rsvp', {
+      name: 'Ada', status: 'going', bringingKind: 'drink', bringingText: 'beer',
+    });
     assert.equal(rsvp.status, 201);
     assert.equal(rsvp.json.counts.going, 1);
+    assert.equal(rsvp.json.hasCard, false);
+    assert.ok(rsvp.json.editToken);
+    assert.equal((await s.call('GET', '/api/guests')).json.find((g) => g.name === 'Ada'), undefined);
+    const early = (await s.call('GET', '/api/bringing')).json;
+    assert.ok(early.food.some((row) => row.kind === 'drink' && row.items.includes('beer')));
+    assert.equal((await s.call('GET', '/api/matches', undefined, { 'x-guest-token': rsvp.json.editToken })).json.matches.length, 0);
 
     const a = await s.call('POST', '/api/guests', {
       name: 'Maya',
@@ -265,6 +272,15 @@ describe('party board', () => {
     assert.equal(visiting.json.area, 'Visiting');
     assert.equal(visiting.json.postcode, undefined);
     assert.equal((await s.call('GET', '/api/admin/guests')).json.find((g) => g.name === 'Aisha').postcode, null);
+
+    const adaCard = await s.call('POST', '/api/guests', { name: 'Ada', interests: ['poetry'] });
+    assert.equal(adaCard.status, 201);
+    assert.equal(adaCard.json.hasCard, true);
+    assert.equal((await s.call('GET', '/api/guests')).json.filter((g) => g.name === 'Ada').length, 1);
+    assert.equal((await s.call('GET', '/api/me', undefined, { 'x-guest-token': rsvp.json.editToken })).status, 401);
+    assert.equal((await s.call('GET', '/api/rsvp')).json.going, 5);
+    const open = (await s.call('GET', '/api/open')).json;
+    assert.ok(!open.some((row) => row.name === 'Ada'));
 
     const gone = await s.call('DELETE', '/api/me', undefined, { 'x-guest-token': token });
     assert.equal(gone.status, 204);

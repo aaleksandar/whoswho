@@ -1,56 +1,72 @@
-// Invite / intent landing. Event copy comes from /api/event (src/event.js).
+// Invite. Four short blocks: who, when, bring, RSVP.
 
 import { h, $ } from './dom.js';
 import { api } from './api.js';
+import { FOOD, BRING_VIBES } from './catalog.js';
+import { saveMe } from './me-store.js';
 
 const root = $('#land');
 const params = new URLSearchParams(location.search);
 
 function countsLine(counts) {
   const bits = [];
-  if (counts.going) bits.push(`${counts.going} coming`);
-  if (counts.maybe) bits.push(`${counts.maybe} maybe`);
-  return bits.length ? bits.join(' · ') : 'Be the first to say you are coming';
+  if (counts?.going) bits.push(`${counts.going} coming`);
+  if (counts?.maybe) bits.push(`${counts.maybe} maybe`);
+  return bits.join(' · ');
+}
+
+function chipRow(options, get, set) {
+  const box = h('div.gf-vibe-suggestions');
+  const draw = () => {
+    const current = get();
+    box.replaceChildren(...options.map((opt) => h(current === opt.id ? 'button.gf-chip.on' : 'button.gf-chip', {
+      type: 'button',
+      onclick: () => { set(current === opt.id ? '' : opt.id); draw(); },
+    }, opt.label)));
+  };
+  draw();
+  return box;
 }
 
 function rsvpCard(event) {
   const name = h('input', {
     type: 'text', name: 'name', maxLength: 40, required: true, autocomplete: 'nickname',
-    placeholder: 'Your name', value: '',
+    placeholder: 'Your name',
   });
   let status = 'going';
-  const choices = h('div.gf-vibe-suggestions');
-  const options = [
-    ['going', "I'll be there"],
-    ['maybe', 'Maybe'],
-    ['no', "Can't make it"],
-  ];
-  const draw = () => {
-    choices.replaceChildren(...options.map(([id, label]) => h(status === id ? 'button.gf-chip.on' : 'button.gf-chip', {
-      type: 'button',
-      onclick: () => { status = id; draw(); },
-    }, label)));
-  };
-  draw();
+  const statusBox = chipRow(
+    [{ id: 'going', label: 'Going' }, { id: 'maybe', label: 'Maybe' }, { id: 'no', label: "Can't" }],
+    () => status,
+    (id) => { status = id || 'going'; },
+  );
+  let bringingKind = '';
+  let vibeKind = '';
+  const foodBox = chipRow(FOOD, () => bringingKind, (id) => { bringingKind = id; });
+  const vibeBox = chipRow(BRING_VIBES, () => vibeKind, (id) => { vibeKind = id; });
+  const bringingText = h('input', { type: 'text', maxLength: 80, placeholder: 'Crisps, a bottle…', autocomplete: 'off' });
+  const vibeText = h('input', { type: 'text', maxLength: 80, placeholder: 'A playlist, a deck…', autocomplete: 'off' });
   const error = h('p.gf-error', { hidden: true });
-  const counts = h('p.land-counts', countsLine(event.counts || {}));
+  const counts = h('p.land-counts', countsLine(event.counts));
   const form = h('form.gf-card', {
     onsubmit: async (e) => {
       e.preventDefault();
       error.hidden = true;
-      if (!name.value.trim()) { error.hidden = false; error.textContent = 'A name is enough.'; name.focus(); return; }
+      if (!name.value.trim()) { error.hidden = false; error.textContent = 'A name.'; name.focus(); return; }
       try {
-        const saved = await api('POST', '/api/rsvp', { name: name.value.trim(), status });
+        const saved = await api('POST', '/api/rsvp', {
+          name: name.value.trim(),
+          status,
+          bringingKind,
+          bringingText: bringingText.value,
+          vibeKind,
+          vibeText: vibeText.value,
+        });
+        if (saved.editToken) saveMe({ token: saved.editToken, id: saved.guestId, name: saved.name });
         sessionStorage.setItem('ww.rsvp', JSON.stringify({ name: saved.name, status: saved.status }));
         counts.textContent = countsLine(saved.counts);
         form.replaceWith(h('section.gf-card',
-          h('h2.land-sub', saved.status === 'no' ? 'We will miss you.' : 'You are on the list.'),
-          h('p', saved.status === 'no'
-            ? 'If you still want a card on the board, you can leave one. You will not show on the screen.'
-            : 'If you are coming, tell the room who you are. A few minutes on your phone, most of it optional.'),
-          event.invited || !event.gated
-            ? h('a.land-btn', { href: '/hi' }, 'Introduce yourself')
-            : h('p.gf-hint', 'Use the invite link you were sent, then introduce yourself.'),
+          h('h2.land-sub', saved.status === 'no' ? 'Miss you.' : "You're on the list."),
+          h('p.land-counts', countsLine(saved.counts)),
         ));
       } catch (err) {
         error.hidden = false;
@@ -61,31 +77,29 @@ function rsvpCard(event) {
     h('h2.land-sub', 'RSVP'),
     counts,
     name,
-    choices,
+    statusBox,
+    h('details.land-more',
+      h('summary', 'Bringing something?'),
+      h('p.gf-label.gf-sub', 'Snack or drink'),
+      foodBox,
+      bringingText,
+      h('p.gf-label.gf-sub', 'Vibe'),
+      vibeBox,
+      vibeText,
+    ),
     error,
     h('button.land-btn', { type: 'submit' }, "That's me"),
   );
   return form;
 }
 
-function inviteCard(event) {
-  if (!event.gated || event.invited) {
-    return h('section.gf-card.land-enter',
-      h('h2.land-sub', 'Come as you are'),
-      h('p', "Answer the two questions, then whatever else is true. On the night you'll see who you should meet."),
-      h('a.land-btn', { href: '/hi' }, 'Introduce yourself'),
-    );
-  }
+function codeCard() {
   const next = params.get('next') || '';
-  return h('section.gf-card',
-    h('h2.land-sub', 'Got the invite?'),
-    params.get('bad') ? h('p.gf-error', "That code didn't work. Try the link again.") : null,
-    h('p', 'The guest list stays behind the invite link. The time and place above are the only public part.'),
-    h('form', { action: '/', method: 'get' },
-      next && next.startsWith('/') && !next.startsWith('//') ? h('input', { type: 'hidden', name: 'next', value: next }) : null,
-      h('input', { type: 'text', name: 'invite', placeholder: 'Invite code', autocomplete: 'off', autocapitalize: 'none', required: true }),
-      h('button.land-btn', { type: 'submit' }, 'Come in'),
-    ),
+  return h('form.land-code', { action: '/', method: 'get' },
+    params.get('bad') ? h('p.gf-error', 'Wrong code.') : null,
+    next && next.startsWith('/') && !next.startsWith('//') ? h('input', { type: 'hidden', name: 'next', value: next }) : null,
+    h('input', { type: 'text', name: 'invite', placeholder: 'Invite code', autocomplete: 'off', autocapitalize: 'none', required: true }),
+    h('button.land-btn', { type: 'submit' }, 'In'),
   );
 }
 
@@ -95,32 +109,21 @@ function render(event) {
     h('p.land-kicker', event.kicker),
     h('h1.land-title', event.title),
     h('p.land-hook', event.hook),
-    h('div.land-themes', ...(event.themes || []).map((theme) => h('section.gf-card.land-theme',
-      h('h2.land-q', theme.q),
-      h('p', theme.text),
-    ))),
-    h('section.gf-card',
-      h('h2.land-sub', 'When & where'),
+    h('section.gf-card.land-tight',
       h('p.land-when', `${event.when} · ${event.time}`),
       h('p', event.place),
-      h('p', event.neighbourhood),
-      h('a.land-btn.ghost', { href: event.mapsUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open in maps'),
+      h('a.land-btn.ghost', { href: event.mapsUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Map'),
     ),
-    h('section.gf-card',
-      h('h2.land-sub', 'The point'),
-      ...event.intent.map((line) => h('p', line)),
+    h('section.gf-card.land-tight',
+      h('p', event.bringLine),
+      h('p.land-examples', (event.examples || []).join(' · ')),
+      event.noWork ? h('p.land-note', event.noWork) : null,
     ),
-    h('section.gf-card',
-      h('h2.land-sub', 'Bring a little'),
-      ...event.bring.map((item) => h('div.land-bring', h('b', item.title), h('p', item.text))),
-    ),
-    event.footnote ? h('p.land-note', event.footnote) : null,
     rsvpCard(event),
-    inviteCard(event),
-    h('p.land-foot', 'Not a networking thing.'),
+    event.gated && !event.invited ? codeCard() : null,
   );
 }
 
 api('GET', '/api/event').then(render).catch(() => {
-  root.replaceChildren(h('p', 'The page did not load. Refresh in a moment.'));
+  root.replaceChildren(h('p', 'Refresh in a moment.'));
 });

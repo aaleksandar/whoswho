@@ -87,7 +87,8 @@ export function createApp({
   const guestFromToken = (req) => db.getByToken(tokenOf(req));
 
   const visibleGuest = (g) => g.rsvp !== 'no';
-  const publicList = () => db.listGuests().filter(visibleGuest).map(publicGuest);
+  const cardedGuest = (g) => visibleGuest(g) && g.hasCard;
+  const publicList = () => db.listGuests().filter(cardedGuest).map(publicGuest);
 
   // ------------------------------------------------------------- live (SSE)
   const clients = new Set();
@@ -149,8 +150,14 @@ export function createApp({
       gated: !!invite,
       invited: hasInvite(req, invite),
       counts: db.rsvpCounts(),
+      bringing: slimBringing(db.bringingTally()),
     });
   });
+
+  function slimBringing(tally) {
+    const slim = (rows) => (rows || []).map(({ label, count }) => ({ label, count }));
+    return { food: slim(tally.food), vibe: slim(tally.vibe) };
+  }
 
   app.get('/api/rsvp', (_req, res) => res.json(db.rsvpCounts()));
   app.post('/api/rsvp', (req, res) => {
@@ -201,13 +208,26 @@ export function createApp({
     return Number.isInteger(id) && id > 0 ? id : null;
   };
 
-  app.get('/api/guests', (_req, res) => res.json(publicList()));
+  app.get('/api/guests', (req, res) => {
+    const list = db.listGuests().filter(visibleGuest);
+    const rows = req.query.all === '1' ? list : list.filter((g) => g.hasCard);
+    res.json(rows.map(publicGuest));
+  });
+
+  app.get('/api/open', (_req, res) => res.json(db.openRsvps()));
+
+  app.post('/api/claim', (req, res) => {
+    const id = Number(req.body?.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Pick a name' });
+    const guest = db.claimGuest(id);
+    if (!guest) return res.status(404).json({ error: 'That name already has a card' });
+    res.json({ ...ownerGuest(guest), editToken: guest.editToken });
+  });
 
   app.post('/api/guests', (req, res) => {
     const created = db.createGuest(req.body);
-    if (created.rsvp) db.addRsvp({ name: created.name, status: created.rsvp });
     const guest = publicGuest(created);
-    broadcast('guests', { type: 'created', guest });
+    if (created.hasCard && created.rsvp !== 'no') broadcast('guests', { type: 'created', guest });
     res.status(201).json({ ...guest, editToken: created.editToken });
   });
 
@@ -221,8 +241,9 @@ export function createApp({
     const me = guestFromToken(req);
     if (!me) return res.status(401).json({ error: 'Open your personal link on this phone', code: 'token' });
     const guest = db.updateGuest(me.id, req.body);
-    if (guest?.rsvp) db.addRsvp({ name: guest.name, status: guest.rsvp });
-    broadcast('guests', { type: 'updated', guest: publicGuest(guest) });
+    const pub = publicGuest(guest);
+    const type = !me.hasCard && guest.hasCard ? 'created' : 'updated';
+    if (guest.rsvp !== 'no' && guest.hasCard) broadcast('guests', { type, guest: pub });
     res.json(ownerGuest(guest));
   });
 
@@ -246,6 +267,7 @@ export function createApp({
   app.get('/api/matches', async (req, res) => {
     const me = guestFromToken(req);
     if (!me) return res.status(401).json({ error: 'Open your personal link on this phone', code: 'token' });
+    if (!me.hasCard) return res.json({ matches: [] });
     const matches = await maybeRewriteReasons(me.name, rankMatches(publicGuest(me), publicList()));
     res.json({ matches });
   });
@@ -268,7 +290,7 @@ export function createApp({
   app.get('/api/qr.svg', async (req, res) => {
     const target = req.query.target;
     const u = urls();
-    let dest = target === 'door' ? u.doorUrl : target === 'hi' ? u.hiUrl : target === 'night' ? u.nightUrl : u.joinUrl;
+    let dest = target === 'door' ? u.doorUrl : target === 'hi' ? u.hiUrl : target === 'join' ? u.joinUrl : u.nightUrl;
     if (invite) {
       dest += `${dest.includes('?') ? '&' : '?'}invite=${encodeURIComponent(invite)}`;
     }
