@@ -87,7 +87,7 @@ The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks 
 
 **The Map:** tap an animal to see its card, or drag to turn London. Either restarts the view's timer.
 
-**The Cloud:** tap a cloud to put it in the spotlight. The sky rearranges itself every 20 seconds (Drift → By vibe → By voice) until someone presses a button.
+**The Cloud:** one fun thing at a time floats to the front for 9 seconds. Tap a cloud to bring it forward; a new one jumps the queue.
 
 ## Privacy
 
