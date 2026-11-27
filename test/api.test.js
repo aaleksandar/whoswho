@@ -265,7 +265,7 @@ test('a v2 database (old avatars, old views) migrates cleanly', async (t) => {
   const db = openDb(file);
   t.after(() => db.close());
   const [g] = db.listGuests();
-  assert.deepEqual(g.avatar, { animal: 'koala', color: 'orange' });
+  assert.deepEqual(g.avatar, { animal: 'sloth', color: 'orange' }); // sloth is a zoo animal now
   assert.equal(g.need, 'a nap');
   assert.deepEqual(db.getSettings().views, ['map', 'cloud', 'wishes']);
   assert.equal(db.addSecret({ text: 'migrated', aboutId: g.id }).by, 'friend');

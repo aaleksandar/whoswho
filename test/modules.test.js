@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePostcode, lookupOutcode, jitter, resolveLocation } from '../src/postcode.js';
-import { normalizeAvatar, randomAvatar, ANIMALS, COLORS } from '../public/js/animals.js';
+import { normalizeAvatar, randomAvatar, animalLabel, ANIMALS, COLORS } from '../public/js/animals.js';
 import { classify, groups, forecast, dominant, VIBES } from '../public/js/weather.js';
 import { project } from '../public/js/geo.js';
 import { lanAddresses } from '../src/network.js';
@@ -53,12 +53,13 @@ test('resolveLocation stores what was typed, places known districts only', () =>
 });
 
 test('normalizeAvatar whitelists the zoo and maps old 2D avatars', () => {
-  assert.equal(ANIMALS.length, 22);
   assert.deepEqual(normalizeAvatar({ animal: 'lion', color: 'mint', hat: '<script>' }), { animal: 'lion', color: 'mint' });
-  // old ids that the 3D zoo doesn't have
+  // old ids under another name
   assert.equal(normalizeAvatar({ animal: 'bunny' }).animal, 'rabbit');
   assert.equal(normalizeAvatar({ animal: 'puppy' }).animal, 'dog');
-  assert.equal(normalizeAvatar({ animal: 'axolotl', bg: 'sky' }).color, 'blue');
+  // old ids that the zoo now has itself
+  assert.deepEqual(normalizeAvatar({ animal: 'axolotl', bg: 'sky' }), { animal: 'axolotl', color: 'blue' });
+  for (const id of ['parrot', 'sloth', 'redpanda']) assert.equal(normalizeAvatar({ animal: id }).animal, id);
   // pre-spirit-animal avatars still get a stable, valid animal
   const old = { skin: 'honey', hair: 'buzz', hat: 'cap', bg: 'mint' };
   const a = normalizeAvatar(old);
@@ -70,6 +71,21 @@ test('normalizeAvatar whitelists the zoo and maps old 2D avatars', () => {
   }
   const r = randomAvatar();
   assert.deepEqual(normalizeAvatar(r), r);
+});
+
+test('the zoo has 66 animals, the same list the 2D and 3D engines draw', () => {
+  assert.equal(ANIMALS.length, 66);
+  assert.equal(new Set(ANIMALS).size, 66);
+  const src = (f) => fs.readFileSync(new URL(`../public/js/3d/${f}`, import.meta.url), 'utf8');
+  const kinds = src('ww-zoo.js').match(/Z\.kinds = \[([^\]]+)\]/)[1].match(/'([a-z]+)'/g).map((q) => q.slice(1, -1));
+  assert.deepEqual(kinds, ANIMALS);
+  for (const f of ['ww-zoo.js', 'ww-zoo3d.js']) {
+    const cases = new Set([...src(f).matchAll(/case '([a-z]+)':/g)].map((m) => m[1]));
+    assert.deepEqual(ANIMALS.filter((a) => !cases.has(a)), [], `${f} draws every animal`);
+  }
+  assert.equal(animalLabel('polarbear'), 'Polar bear');
+  assert.equal(animalLabel('redpanda'), 'Red panda');
+  assert.equal(animalLabel('axolotl'), 'Axolotl');
 });
 
 test('classify turns a secret into weather', () => {

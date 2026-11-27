@@ -76,6 +76,36 @@
     var H = function (c, sx, sy, sz) { return sph(head, c, 0, 0, 0, R * (sx || 1), R * (sy || 1), R * (sz || 1)); };
     var dirs = function (n, filter) { var out = [], ga = Math.PI * (3 - Math.sqrt(5)); for (var k = 0; k < n; k++) { var y = 1 - 2 * (k + 0.5) / n, rr = Math.sqrt(1 - y * y), a = k * ga, d = new T.Vector3(Math.cos(a) * rr, y, Math.sin(a) * rr); if (!filter || filter(d)) out.push(d); } return out; };
 
+    var both = function (fn) { fn(-1); fn(1); };
+    var tube = function (par, c, pts, r, cap) {
+      var cv = new T.CatmullRomCurve3(pts.map(function (p) { return new T.Vector3(p[0], p[1], p[2]); }));
+      var m = mesh(new T.TubeGeometry(cv, 20, r, 10, false), c); par.add(m);
+      var e = pts[pts.length - 1], s = pts[0];
+      if (cap !== false) { sph(par, c, e[0], e[1], e[2], r); sph(par, c, s[0], s[1], s[2], r); }
+      return m;
+    };
+    var leaf = function (c, inner, x, y, len, wid, tilt, z) { // a flat ear that leans out by `tilt`
+      both(function (m) {
+        var g = new T.Group(); g.position.set(m * x, y, z || 0); g.rotation.z = -m * tilt;
+        sph(g, c, 0, len, 0, wid, len, wid * 0.45);
+        if (inner) sph(g, inner, 0, len, wid * 0.24, wid * 0.58, len * 0.72, wid * 0.24);
+        head.add(g); parts.ears.push(g);
+      });
+    };
+    var eyeGroup = function (x, y, z, build) { var g = new T.Group(); g.position.set(x, y, z); build(g); head.add(g); parts.eyes.push(g); return g; };
+    var irisEyes = function (x, y, r, iris) { // coloured eyes (wolf, goat, eagle)
+      both(function (m) { eyeGroup(m * x, y, fz(m * x, y) * 0.95, function (g) { sph(g, iris, 0, 0, 0, r * 1.15, r * 1.15, r * 0.5); sph(g, INK, 0, 0, r * 0.3, r * 0.62, r * 0.66, r * 0.4, true); sph(g, '#FFFFFF', r * 0.25, r * 0.3, r * 0.65, r * 0.22); }); });
+    };
+    var muzzle = function (c, w, h, y, z) { return sph(head, c, 0, y == null ? -0.15 : y, z == null ? 0.33 : z, w || 0.2, h || 0.15, 0.16); };
+    var nostrils = function (c, dx, y, z, r) { both(function (m) { sph(head, c, m * dx, y, z, r || 0.025, (r || 0.025) * 1.4, (r || 0.025) * 0.7); }); };
+    var bands = function (par, c, cy, cz, rx, ry, rz, ys) { // stripes around an ellipsoid body
+      ys.forEach(function (dy) { var k = Math.sqrt(Math.max(0, 1 - (dy / ry) * (dy / ry))); sph(par, c, 0, cy + dy, cz, rx * k * 1.03, 0.028, rz * k * 1.03); });
+    };
+    var tailGroup = function (x, y, z) { var g = new T.Group(); g.position.set(x, y, z); ch.add(g); parts.tail = g; return g; };
+    var lune = function (c, center, width, t0, t1) { // a stripe hugging the head from the crown down the face (angles in turns of PI)
+      head.add(mesh(new T.SphereGeometry(R * 1.012, 24, 16, Math.PI / 2 + center - width / 2, width, t0 * Math.PI, (t1 - t0) * Math.PI), c));
+    };
+    var mane = function (c, from, to, n, r) { for (var k = 0; k < n; k++) { var a = from + (to - from) * k / (n - 1); sph(head, c, 0, 0.5 * Math.cos(a), 0.5 * Math.sin(a) * -1 + 0.02, r * 0.8, r, r * 0.9); } };
     switch (kind) {
       case 'fox':
         body('#FF7A3D', '#FFF6EC'); H('#FF7A3D'); earCone('#FF7A3D', '#3A2320', 0.27, 0.32, 0.14, 0.32, 0.3);
@@ -183,6 +213,279 @@
         sph(head, '#FF9DBF', -0.14, 0.34, 0.25, 0.1); sph(head, '#A9C8FF', 0.02, 0.4, 0.24, 0.09);
         sph(head, '#FFE0EA', 0, -0.18, 0.34, 0.2, 0.13, 0.14); [-1, 1].forEach(function (m) { sph(head, '#C2557A', m * 0.07, -0.17, 0.47, 0.02, 0.03, 0.015); });
         eyes(0.17, 0.05, 0.065); cheeks(0.3, -0.1); break;
+      case 'deer':
+        body('#C98A55', '#F6DDBF'); H('#C98A55'); leaf('#C98A55', '#FFD9C2', 0.36, 0.12, 0.13, 0.08, 1.15);
+        both(function (m) { tube(head, '#8A5A35', [[m * 0.14, 0.4, 0], [m * 0.24, 0.62, 0], [m * 0.28, 0.82, 0.02]], 0.03); tube(head, '#8A5A35', [[m * 0.23, 0.6, 0], [m * 0.42, 0.7, 0]], 0.025); tube(head, '#8A5A35', [[m * 0.26, 0.74, 0.01], [m * 0.16, 0.88, 0.03]], 0.022); });
+        [[-0.1, 0.3], [0, 0.34], [0.1, 0.3], [-0.05, 0.24], [0.06, 0.23]].forEach(function (p) { stick('#FFF1DA', p[0], p[1], 0.028, 0.028, 0.01); });
+        muzzle('#F6DDBF', 0.19, 0.14); nose(INK, -0.06, 0.48, 0.05); eyes(0.17, 0.07, 0.065); cheeks(0.3, -0.08);
+        parts.tail = sph(ch, '#FFFFFF', 0, -0.56, -0.33, 0.07, 0.08, 0.06); break;
+      case 'moose':
+        body('#7A4E33', '#A2724E', 1.1); H('#7A4E33'); leaf('#7A4E33', null, 0.4, 0.1, 0.1, 0.07, 1.25);
+        both(function (m) { var g = new T.Group(); g.position.set(m * 0.26, 0.34, 0); g.rotation.z = -m * 0.95; tube(g, '#E8C48A', [[0, 0, 0], [0, 0.14, 0]], 0.04); sph(g, '#E8C48A', 0, 0.28, 0, 0.22, 0.13, 0.04); for (var k = 0; k < 4; k++) cone(g, '#E8C48A', 0.03, 0.12, -0.15 + k * 0.1, 0.42, 0); head.add(g); });
+        muzzle('#A2724E', 0.26, 0.2, -0.16, 0.32); nostrils('#3A2320', 0.08, -0.12, 0.52, 0.03); eyes(0.18, 0.12, 0.055); cheeks(0.32, -0.02);
+        sph(head, '#7A4E33', 0, -0.44, 0.22, 0.06, 0.1, 0.05); break;
+      case 'giraffe':
+        head.position.y = 0.24; sph(ch, '#FFC94D', 0, -0.22, 0.02, 0.15, 0.34, 0.15);
+        [[0.1, -0.2, 0.13], [-0.09, -0.32, 0.12], [0.02, -0.08, 0.14]].forEach(function (p) { sph(ch, '#D98A3A', p[0], p[1], p[2], 0.05, 0.05, 0.03); });
+        body('#FFC94D', '#FFE7A8'); [[0.2, -0.5, 0.2], [-0.22, -0.62, 0.18], [0.12, -0.72, 0.22]].forEach(function (p) { sph(ch, '#D98A3A', p[0], p[1], p[2], 0.06, 0.05, 0.04); });
+        H('#FFC94D'); [[-0.3, 0.2], [0.28, 0.24], [0.4, -0.05], [-0.4, -0.08], [0.05, 0.4], [-0.18, 0.36]].forEach(function (p) { stick('#D98A3A', p[0], p[1], 0.075, 0.065, 0.02); });
+        both(function (m) { tube(head, '#FFC94D', [[m * 0.12, 0.38, 0], [m * 0.15, 0.62, 0]], 0.035); sph(head, '#8A5A35', m * 0.15, 0.64, 0, 0.065); });
+        leaf('#FFC94D', '#FFB3C7', 0.38, 0.16, 0.12, 0.07, 1.3);
+        muzzle('#FFE7A8', 0.2, 0.15); nostrils(INK, 0.06, -0.1, 0.49); eyes(0.17, 0.07, 0.065); cheeks(0.3, -0.08);
+        parts.tail = tailGroup(0, -0.55, -0.32); tube(parts.tail, '#FFC94D', [[0, 0, 0], [0, -0.18, -0.06]], 0.02); sph(parts.tail, '#8A5A35', 0, -0.22, -0.07, 0.04, 0.06, 0.04); break;
+      case 'zebra':
+        body('#FFFFFF', '#FFFFFF'); bands(ch, INK, -0.62, -0.02, 0.33, 0.3, 0.3, [0.16, 0.05, -0.06]);
+        H('#FFFFFF'); [[-0.09, 0.32, 0.25], [0, 0.36, 0], [0.09, 0.32, -0.25]].forEach(function (p) { stick(INK, p[0], p[1], 0.025, 0.09, 0.015, p[2]); });
+        both(function (m) { [0.14, -0.02, -0.18].forEach(function (y) { stick(INK, m * 0.42, y, 0.025, 0.1, 0.015, Math.PI / 2 - m * 0.25); }); });
+        mane(INK, -0.2, 1.7, 8, 0.06); earCone('#FFFFFF', INK, 0.24, 0.33, 0.1, 0.26, 0.25);
+        muzzle('#4A4458', 0.21, 0.15, -0.16, 0.33); nostrils('#9A90AA', 0.07, -0.13, 0.49); eyes(0.17, 0.08, 0.065); cheeks(0.3, -0.06);
+        parts.tail = tailGroup(0, -0.55, -0.32); tube(parts.tail, '#FFFFFF', [[0, 0, 0], [0, -0.18, -0.05]], 0.02); sph(parts.tail, INK, 0, -0.24, -0.06, 0.045, 0.08, 0.045); break;
+      case 'horse':
+        body('#A0623A', '#C98A5E'); H('#A0623A'); earCone('#A0623A', '#6E3F22', 0.22, 0.34, 0.09, 0.26, 0.15);
+        stick('#FFF6EC', 0, 0.12, 0.05, 0.16, 0.02); mane('#4A2E1C', 0.15, 1.7, 8, 0.07);
+        sph(head, '#4A2E1C', -0.06, 0.42, 0.2, 0.14, 0.08, 0.12); sph(head, '#4A2E1C', 0.08, 0.43, 0.16, 0.12, 0.07, 0.12);
+        muzzle('#D9A882', 0.22, 0.15, -0.17, 0.33); nostrils('#6E3F22', 0.08, -0.14, 0.49); eyes(0.18, 0.06, 0.065); cheeks(0.31, -0.06);
+        parts.tail = tailGroup(0, -0.5, -0.32); tube(parts.tail, '#4A2E1C', [[0, 0, 0], [0, -0.08, -0.12], [0, -0.3, -0.16]], 0.055); break;
+      case 'donkey':
+        body('#A6A0AE', '#F1EEF4'); H('#A6A0AE'); leaf('#A6A0AE', '#F1EEF4', 0.18, 0.34, 0.27, 0.085, 0.5);
+        parts.ears.forEach(function (g) { sph(g, '#5A5462', 0, 0.5, 0, 0.06, 0.06, 0.035); });
+        sph(head, '#5A5462', 0, 0.44, 0.18, 0.1, 0.06, 0.08); both(function (m) { stick('#E4E0EA', m * 0.17, 0.06, 0.1, 0.1, 0.02); });
+        muzzle('#F1EEF4', 0.25, 0.18, -0.17, 0.31); nostrils('#5A5462', 0.08, -0.12, 0.5); eyes(0.17, 0.06, 0.06); cheeks(0.32, -0.08);
+        parts.tail = tailGroup(0, -0.55, -0.32); tube(parts.tail, '#A6A0AE', [[0, 0, 0], [0, -0.18, -0.05]], 0.02); sph(parts.tail, '#5A5462', 0, -0.24, -0.06, 0.045, 0.08, 0.045); break;
+      case 'llama':
+        head.position.y = 0.22; sph(ch, '#F4E6D0', 0, -0.25, 0.02, 0.17, 0.33, 0.17);
+        body('#F4E6D0', '#FFF8EC'); dirs(22, function (d) { return d.y > 0.1; }).forEach(function (d) { sph(ch, '#FFF8EC', d.x * 0.3, -0.62 + d.y * 0.28, -0.02 + d.z * 0.28, 0.1); });
+        H('#F4E6D0'); [[-0.14, 0.42, 0.1], [0.12, 0.43, 0.12], [0, 0.46, 0.0], [0, 0.4, 0.22]].forEach(function (p) { sph(head, '#FFF8EC', p[0], p[1], p[2], 0.13); });
+        leaf('#F4E6D0', '#E8B48C', 0.2, 0.32, 0.2, 0.06, 0.25);
+        both(function (m) { sph(head, '#FF7AA8', m * 0.25, 0.32, 0.16, 0.055); sph(head, '#FFD84D', m * 0.32, 0.26, 0.1, 0.05); sph(head, '#4F9BFF', m * 0.36, 0.34, 0.04, 0.045); });
+        muzzle('#FFF8EC', 0.17, 0.14, -0.16, 0.34); nose(INK, -0.09, 0.49, 0.035); eyes(0.17, 0.06, 0.065); cheeks(0.3, -0.1); break;
+      case 'camel':
+        body('#E0B07A', '#F2D3A6', 1.05); sph(ch, '#E0B07A', 0, -0.6, -0.26, 0.29, 0.27, 0.3);
+        sph(ch, '#D9A066', 0, -0.34, -0.14, 0.16, 0.18, 0.14); sph(ch, '#D9A066', 0, -0.36, -0.42, 0.15, 0.16, 0.13);
+        H('#E0B07A', 0.95, 1.05, 1); earRound('#E0B07A', '#B9814A', 0.4, 0.22, 0.08); sph(head, '#B9814A', 0, 0.48, 0.1, 0.12, 0.07, 0.1);
+        muzzle('#F2D3A6', 0.23, 0.17, -0.18, 0.32); sph(head, '#F2D3A6', 0, -0.33, 0.38, 0.12, 0.06, 0.08); nostrils('#8A5A35', 0.08, -0.14, 0.5);
+        eyes(0.17, 0.08, 0.06); both(function (m) { sph(head, '#C98F55', m * 0.17, 0.115, 0.452, 0.078, 0.045, 0.045); }); cheeks(0.31, -0.08);
+        parts.tail = tailGroup(0, -0.58, -0.56); tube(parts.tail, '#E0B07A', [[0, 0, 0], [0, -0.18, -0.04]], 0.02); sph(parts.tail, '#B9814A', 0, -0.22, -0.05, 0.035, 0.06, 0.035); break;
+      case 'goat':
+        body('#F4F1EA', '#FFFFFF'); H('#F4F1EA');
+        both(function (m) { tube(head, '#C8B79A', [[m * 0.12, 0.38, 0.06], [m * 0.2, 0.56, -0.06], [m * 0.3, 0.56, -0.24], [m * 0.34, 0.42, -0.3]], 0.035); });
+        leaf('#F4F1EA', '#FFC7D6', 0.42, 0.06, 0.12, 0.06, 1.9);
+        cone(head, '#E2DACB', 0.07, 0.2, 0, -0.5, 0.3, Math.PI);
+        both(function (m) { eyeGroup(m * 0.17, 0.08, fz(0.17, 0.08) * 0.95, function (g) { sph(g, '#FFE08A', 0, 0, 0, 0.075, 0.075, 0.035); sph(g, INK, 0, 0, 0.028, 0.05, 0.02, 0.02); sph(g, '#FFFFFF', 0.02, 0.03, 0.04, 0.015); }); });
+        muzzle('#FFFFFF', 0.15, 0.11, -0.16, 0.36); nose('#C2557A', -0.1, 0.48, 0.035); cheeks(0.3, -0.08);
+        parts.tail = sph(ch, '#F4F1EA', 0, -0.48, -0.32, 0.05, 0.1, 0.05); break;
+      case 'hippo':
+        body('#B79BD9', '#D3C0EE', 1.2); H('#B79BD9', 1.1, 1, 1);
+        muzzle('#D3C0EE', 0.34, 0.22, -0.16, 0.3); nostrils('#6E5A8C', 0.1, -0.02, 0.53, 0.035);
+        both(function (m) { var t = mesh(new T.BoxGeometry(0.06, 0.07, 0.03), '#FFFFFF'); t.position.set(m * 0.1, -0.3, 0.46); head.add(t); });
+        eyes(0.19, 0.2, 0.05); earRound('#B79BD9', '#E8B4D6', 0.25, 0.42, 0.07); cheeks(0.36, -0.08, 0.55);
+        parts.tail = sph(ch, '#B79BD9', 0, -0.55, -0.33, 0.04, 0.07, 0.04); break;
+      case 'rhino':
+        body('#9AA5B5', '#B5BECB', 1.15); H('#9AA5B5'); earCone('#9AA5B5', '#C9CFDA', 0.28, 0.32, 0.08, 0.18, 0.35);
+        muzzle('#B5BECB', 0.24, 0.17, -0.14, 0.33); cone(head, '#F1EAD8', 0.09, 0.3, 0, 0.06, 0.52, 0.35); cone(head, '#F1EAD8', 0.05, 0.14, 0, 0.27, 0.44, 0.3);
+        nostrils('#6A7486', 0.12, -0.22, 0.46); eyes(0.24, 0.04, 0.045); cheeks(0.34, -0.1);
+        parts.tail = sph(ch, '#9AA5B5', 0, -0.52, -0.33, 0.04, 0.09, 0.04); break;
+      case 'gorilla':
+        body('#3A3442', '#5A5266', 1.15); both(function (m) { sph(ch, '#3A3442', m * 0.38, -0.62, 0.06, 0.12, 0.2, 0.12); sph(ch, '#5A5266', m * 0.4, -0.8, 0.1, 0.08, 0.05, 0.08); });
+        H('#3A3442'); sph(head, '#9C90A8', 0, -0.06, 0.24, 0.34, 0.34, 0.3); sph(head, '#2A2432', 0, 0.14, 0.42, 0.27, 0.07, 0.08);
+        earRound('#3A3442', '#7A6E85', 0.48, 0, 0.08, 0, Math.PI / 2.4);
+        eye(-0.13, 0.05, 0.045, 0.5); eye(0.13, 0.05, 0.045, 0.5); sph(head, '#7A6E85', 0, -0.06, 0.52, 0.1, 0.06, 0.05); nostrils(INK, 0.04, -0.07, 0.565, 0.02); smile(-0.2, 0.5, 0.09); break;
+      case 'sloth':
+        body('#B59A7A', '#D9C3A5'); both(function (m) { [-0.03, 0, 0.03].forEach(function (d) { sph(ch, '#F1E3CC', m * 0.33 + d, -0.76, 0.1, 0.015, 0.05, 0.015); }); });
+        H('#B59A7A'); sph(head, '#F1E3CC', 0, -0.03, 0.2, 0.4, 0.36, 0.32);
+        both(function (m) { stick('#5A4230', m * 0.17, 0.02, 0.12, 0.06, 0.03, m * 0.45); });
+        eye(-0.17, 0.03, 0.04, 0.5); eye(0.17, 0.03, 0.04, 0.5); sph(head, '#3A2320', 0, -0.1, 0.5, 0.06, 0.045, 0.04, true); smile(-0.17, 0.48, 0.08); cheeks(0.3, -0.14);
+        [-0.06, 0, 0.06].forEach(function (d) { sph(head, '#8A6E50', d, 0.47, 0.12, 0.03, 0.07, 0.03); }); break;
+      case 'otter':
+        body('#8A5A3C', '#EBD3B4'); H('#8A5A3C'); sph(head, '#EBD3B4', 0, -0.13, 0.22, 0.38, 0.28, 0.32);
+        both(function (m) { sph(head, '#F6E6D0', m * 0.07, -0.13, 0.43, 0.09, 0.07, 0.07); }); nose(INK, -0.05, 0.5, 0.05); whiskers(-0.13, 0.45);
+        eyes(0.17, 0.1, 0.055); earRound('#8A5A3C', '#C9A07E', 0.42, 0.16, 0.07); cheeks(0.3, -0.06);
+        parts.tail = tailGroup(0, -0.75, -0.3); tube(parts.tail, '#8A5A3C', [[0, 0, 0], [0, -0.08, -0.15], [0, -0.12, -0.32]], 0.06); break;
+      case 'beaver':
+        body('#9B6B43', '#C9A07E'); H('#9B6B43'); earRound('#6E4A30', '#C9A07E', 0.34, 0.3, 0.08);
+        both(function (m) { sph(head, '#D9B08C', m * 0.08, -0.12, 0.4, 0.12, 0.1, 0.09); }); nose(INK, -0.04, 0.5, 0.05);
+        var bt = mesh(new T.BoxGeometry(0.12, 0.1, 0.04), '#FFFFFF'); bt.position.set(0, -0.27, 0.44); head.add(bt); var bl = mesh(new T.BoxGeometry(0.008, 0.1, 0.045), INK); bl.position.set(0, -0.27, 0.445); head.add(bl);
+        eyes(0.17, 0.12, 0.055); cheeks(0.3, -0.04);
+        parts.tail = sph(ch, '#5A3A26', 0, -0.84, -0.44, 0.16, 0.04, 0.24); break;
+      case 'squirrel':
+        body('#E07B39', '#FFE7CC'); H('#E07B39'); earCone('#E07B39', '#F6B77A', 0.24, 0.34, 0.09, 0.24, 0.2);
+        parts.ears.forEach(function (g) { cone(g, '#C25E22', 0.035, 0.12, 0, 0.25, 0); });
+        both(function (m) { sph(head, '#FFE7CC', m * 0.16, -0.14, 0.33, 0.16, 0.13, 0.12); }); sph(head, INK, 0, -0.05, 0.5, 0.04, 0.03, 0.03, true);
+        var st2 = mesh(new T.BoxGeometry(0.06, 0.06, 0.03), '#FFFFFF'); st2.position.set(0, -0.22, 0.45); head.add(st2);
+        eyes(0.17, 0.09, 0.062); cheeks(0.31, -0.1);
+        parts.tail = tailGroup(0, -0.6, -0.3); tube(parts.tail, '#E07B39', [[0, 0, 0], [0, 0.25, -0.18], [0, 0.55, -0.14], [0, 0.72, 0.02]], 0.14); sph(parts.tail, '#F6B77A', 0, 0.76, 0.05, 0.12); break;
+      case 'badger':
+        body('#3A3442', '#5A5466'); H('#9A9AA8');
+        lune('#FFFFFF', 0, 0.36, 0.02, 0.66); both(function (m) { lune(INK, m * 0.38, 0.32, 0.06, 0.6); });
+        earRound(INK, '#9A9AA8', 0.36, 0.28, 0.07); eye(-0.16, 0.05, 0.035, 0.5, true); eye(0.16, 0.05, 0.035, 0.5, true);
+        muzzle('#FFFFFF', 0.16, 0.12, -0.14, 0.36); nose(INK, -0.1, 0.5, 0.05); cheeks(0.32, -0.14); break;
+      case 'wolf':
+        body('#7E8AA0', '#E9EDF3'); H('#7E8AA0'); earCone('#7E8AA0', '#E9EDF3', 0.26, 0.32, 0.13, 0.34, 0.22);
+        both(function (m) { sph(head, '#E9EDF3', m * 0.2, -0.16, 0.3, 0.18, 0.14, 0.13); }); stick('#5E6A80', 0, 0.26, 0.07, 0.11, 0.02);
+        sph(head, '#E9EDF3', 0, -0.12, 0.42, 0.14, 0.11, 0.16); nose(INK, -0.05, 0.58, 0.05); irisEyes(0.17, 0.09, 0.065, '#FFC94D');
+        parts.tail = tailGroup(0, -0.55, -0.32); tube(parts.tail, '#7E8AA0', [[0, 0, 0], [0, -0.12, -0.14], [0, -0.26, -0.22]], 0.08); sph(parts.tail, '#E9EDF3', 0, -0.28, -0.24, 0.07); break;
+      case 'polarbear':
+        body('#F4F8FF', '#FFFFFF'); H('#F4F8FF'); earRound('#F4F8FF', '#DCE6FF', 0.33, 0.33, 0.13);
+        muzzle('#FFFFFF', 0.2, 0.15, -0.14, 0.34); nose(INK, -0.08, 0.47, 0.055); eyes(0.17, 0.07, 0.065); cheeks(0.3, -0.08);
+        var sc = mesh(new T.TorusGeometry(0.26, 0.06, 10, 28), '#4F7BFF'); sc.rotation.x = Math.PI / 2; sc.position.set(0, -0.42, 0); ch.add(sc);
+        var se = sph(ch, '#4F7BFF', 0.14, -0.56, 0.24, 0.06, 0.14, 0.04); se.rotation.z = 0.2; break;
+      case 'redpanda':
+        body('#D9572B', null); both(function (m) { sph(ch, '#3A2320', m * 0.16, -0.9, 0.06, 0.1, 0.06, 0.12); sph(ch, '#3A2320', m * 0.3, -0.62, 0.05, 0.085, 0.135, 0.085); }); H('#D9572B'); earCone('#FFF6EC', '#D9572B', 0.27, 0.32, 0.13, 0.26, 0.3);
+        both(function (m) { sph(head, '#FFF6EC', m * 0.21, -0.1, 0.32, 0.15, 0.12, 0.12); stick('#FFF6EC', m * 0.15, 0.22, 0.05, 0.035, 0.015); stick('#8A2E14', m * 0.2, -0.02, 0.03, 0.07, 0.015, -m * 0.3); });
+        muzzle('#FFF6EC', 0.14, 0.1, -0.14, 0.36); nose(INK, -0.08, 0.48, 0.04); eyes(0.17, 0.07, 0.065);
+        parts.tail = tailGroup(0, -0.6, -0.3); for (var rk = 0; rk < 6; rk++) sph(parts.tail, rk % 2 ? '#F2A36B' : '#D9572B', 0, 0.02 + rk * 0.07, -0.06 - rk * 0.05, 0.1 - rk * 0.006); break;
+      case 'kangaroo':
+        body('#D99A5E', '#F6DDBF', 1.05); both(function (m) { sph(ch, '#D99A5E', m * 0.16, -0.9, 0.16, 0.1, 0.06, 0.2); });
+        sph(ch, '#F6DDBF', 0, -0.72, 0.2, 0.17, 0.12, 0.09); sph(ch, '#D99A5E', 0, -0.6, 0.25, 0.075); both(function (m) { sph(ch, INK, m * 0.025, -0.59, 0.32, 0.01, 0.012, 0.008); sph(ch, '#D99A5E', m * 0.05, -0.53, 0.24, 0.02, 0.04, 0.015); });
+        H('#D99A5E'); earCone('#D99A5E', '#F6C9A0', 0.2, 0.32, 0.08, 0.34, 0.25);
+        muzzle('#F6DDBF', 0.18, 0.15); nose(INK, -0.06, 0.48, 0.05); eyes(0.17, 0.08, 0.062); cheeks(0.3, -0.08);
+        parts.tail = tailGroup(0, -0.62, -0.3); tube(parts.tail, '#D99A5E', [[0, 0, 0], [0, -0.16, -0.18], [0, -0.28, -0.42]], 0.07); break;
+      case 'platypus':
+        body('#8A5A3C', '#C9A07E'); H('#8A5A3C'); sph(head, '#4A5672', 0, -0.14, 0.48, 0.24, 0.07, 0.2); nostrils('#8A98B8', 0.05, -0.08, 0.64, 0.015);
+        eyes(0.18, 0.1, 0.05); cheeks(0.3, -0.02);
+        both(function (m) { sph(ch, '#4A5672', m * 0.16, -0.92, 0.16, 0.1, 0.03, 0.12); });
+        parts.tail = sph(ch, '#6E4A30', 0, -0.84, -0.42, 0.15, 0.04, 0.22); break;
+      case 'seal':
+        sph(ch, '#A9B8C9', 0, -0.64, -0.08, 0.34, 0.28, 0.38); sph(ch, '#DCE4EE', 0, -0.66, 0.1, 0.25, 0.2, 0.22);
+        both(function (m) { var f = sph(ch, '#8A9AB0', m * 0.34, -0.74, 0.1, 0.06, 0.08, 0.15); f.rotation.z = m * 0.6; });
+        parts.tail = tailGroup(0, -0.84, -0.44); both(function (m) { var t = sph(parts.tail, '#8A9AB0', m * 0.1, 0, -0.04, 0.12, 0.03, 0.07); t.rotation.y = m * 0.5; });
+        H('#A9B8C9'); both(function (m) { sph(head, '#E4ECF5', m * 0.07, -0.12, 0.44, 0.09, 0.07, 0.07); }); nose(INK, -0.04, 0.5, 0.045); whiskers(-0.12, 0.45);
+        [[-0.2, 0.3], [0.24, 0.28], [-0.32, 0.12]].forEach(function (p) { stick('#8A9AB0', p[0], p[1], 0.035, 0.035, 0.01); });
+        eyes(0.18, 0.08, 0.085); cheeks(0.32, -0.06); break;
+      case 'whale':
+        sph(ch, '#4F7BFF', 0, -0.62, -0.06, 0.38, 0.3, 0.4); sph(ch, '#DCE6FF', 0, -0.7, 0.12, 0.28, 0.2, 0.26);
+        both(function (m) { var f = sph(ch, '#4F7BFF', m * 0.4, -0.68, 0.08, 0.05, 0.08, 0.17); f.rotation.z = m * 0.7; });
+        parts.tail = tailGroup(0, -0.62, -0.5); tube(parts.tail, '#4F7BFF', [[0, 0, 0], [0, 0.12, -0.16]], 0.07); both(function (m) { var t = sph(parts.tail, '#4F7BFF', m * 0.13, 0.2, -0.2, 0.15, 0.035, 0.07); t.rotation.y = m * 0.5; });
+        H('#4F7BFF', 1.05, 0.95, 1); sph(head, '#DCE6FF', 0, -0.2, 0.17, 0.42, 0.26, 0.33);
+        [-0.1, 0, 0.1].forEach(function (dx) { var g = mesh(new T.BoxGeometry(0.012, 0.12, 0.01), '#A9C8FF'); g.position.set(dx, -0.34, 0.37); g.rotation.x = 0.6; head.add(g); });
+        eyes(0.25, -0.02, 0.055); smile(-0.12, 0.47, 0.15); cheeks(0.34, -0.12);
+        var wm2 = M('#A9C8FF', true); [[0, 0.62, 0, 0.05, 0.12], [-0.12, 0.74, 0, 0.045, 0.045], [0.12, 0.74, 0, 0.045, 0.045], [0, 0.8, 0, 0.05, 0.05]].forEach(function (d) { var w = sph(head, '#A9C8FF', d[0], d[1], d[2], d[3], d[4], d[3]); w.material = wm2; }); break;
+      case 'shark':
+        body('#7D8FA8', '#F4F6FA'); H('#7D8FA8'); sph(head, '#F4F6FA', 0, -0.2, 0.18, 0.42, 0.26, 0.32);
+        var fin = cone(head, '#7D8FA8', 0.14, 0.34, 0, 0.6, -0.06, -0.45, 0, 20); fin.scale.x = 0.3;
+        sph(head, '#5A2E3A', 0, -0.2, 0.43, 0.17, 0.05, 0.05); for (var tk = -2; tk <= 2; tk++) cone(head, '#FFFFFF', 0.022, 0.05, tk * 0.06, -0.175, 0.48 - Math.abs(tk) * 0.01, Math.PI);
+        both(function (m) { [0, 0.07, 0.14].forEach(function (d) { stick('#5E6A80', m * (0.38 + d * 0.15), -0.06 - d * 0.3, 0.012, 0.07, 0.01, -m * 0.2); }); });
+        eyes(0.18, 0.07, 0.06); cheeks(0.3, -0.06);
+        parts.tail = tailGroup(0, -0.58, -0.32); both(function (m) { var t = cone(parts.tail, '#7D8FA8', 0.07, 0.24, 0, m * 0.1, -0.06, -0.6 * m - Math.PI / 2 * (m < 0 ? 0 : 0), 0, 16); t.rotation.x = m > 0 ? -0.9 : -2.3; t.scale.x = 0.35; }); break;
+      case 'octopus':
+        for (var ok = 0; ok < 8; ok++) { var oa = (ok + 0.5) / 8 * Math.PI * 2, ox = Math.sin(oa), oz = Math.cos(oa); tube(ch, '#FF7AA8', [[ox * 0.18, -0.32, oz * 0.18], [ox * 0.36, -0.6, oz * 0.36], [ox * 0.46, -0.84, oz * 0.46], [ox * 0.6, -0.86, oz * 0.6], [ox * 0.64, -0.76, oz * 0.64]], 0.065); }
+        H('#FF7AA8', 1, 1.12, 1); [[-0.22, 0.3], [0.2, 0.36], [0.32, 0.12], [-0.34, 0.08]].forEach(function (p) { stick('#FF9DBF', p[0], p[1], 0.05, 0.05, 0.015); });
+        eyes(0.17, -0.02, 0.075); smile(-0.2, 0.46, 0.07); cheeks(0.3, -0.14); break;
+      case 'crab':
+        ch.position.y = 0.75; H('#FF5A4E', 1.2, 0.72, 0.95); [[-0.25, 0.22], [0.22, 0.24], [0, 0.3]].forEach(function (p) { sph(head, '#FF8A7A', p[0], p[1], 0.24, 0.05, 0.03, 0.04); });
+        both(function (m) {
+          tube(head, '#FF5A4E', [[m * 0.15, 0.25, 0.15], [m * 0.18, 0.5, 0.18]], 0.035);
+          eyeGroup(m * 0.18, 0.56, 0.18, function (g) { sph(g, '#FFFFFF', 0, 0, 0, 0.09); sph(g, INK, 0, 0, 0.06, 0.05, 0.05, 0.04, true); sph(g, '#FFFFFF', 0.015, 0.02, 0.1, 0.014); });
+          tube(ch, '#FF5A4E', [[m * 0.5, -0.05, 0.1], [m * 0.62, 0.15, 0.24]], 0.045);
+          var cg = new T.Group(); cg.position.set(m * 0.64, 0.24, 0.28); sph(cg, '#FF5A4E', 0, 0, 0, 0.17, 0.13, 0.11); var up = sph(cg, '#FF5A4E', 0, 0.16, 0.06, 0.09, 0.07, 0.07); up.rotation.z = m * 0.4; ch.add(cg); parts.ears.push(cg);
+          [-0.15, 0, 0.15].forEach(function (z) { tube(ch, '#FF5A4E', [[m * 0.46, -0.12, z], [m * 0.62, -0.36, z * 1.3], [m * 0.68, -0.68, z * 1.5]], 0.035); });
+        });
+        smile(0.02, 0.47, 0.1); cheeks(0.4, -0.02, 0.6); break;
+      case 'turtle':
+        body('#B9E39A', '#F1E9A8'); sph(ch, '#4E9A57', 0, -0.5, -0.12, 0.44, 0.34, 0.44); sph(ch, '#E8C468', 0, -0.6, -0.12, 0.43, 0.06, 0.43);
+        dirs(30, function (d) { return d.y > 0.15; }).forEach(function (d) { var p = new T.Vector3(d.x * 0.44, d.y * 0.34, d.z * 0.44); var n = new T.Vector3(d.x / 0.44, d.y / 0.34, d.z / 0.44).normalize(); var h2 = mesh(new T.CylinderGeometry(0.075, 0.075, 0.02, 6), '#8BCB7B'); h2.position.set(p.x, -0.5 + p.y, -0.12 + p.z); h2.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), n); ch.add(h2); });
+        head.position.set(0, -0.12, 0.26); head.scale.setScalar(0.82); H('#C9E89A'); eyes(0.17, 0.06, 0.07); smile(-0.12, 0.46, 0.1); cheeks(0.3, -0.08);
+        parts.tail = cone(ch, '#B9E39A', 0.06, 0.16, 0, -0.68, -0.56, -Math.PI / 2); break;
+      case 'crocodile':
+        body('#4FA67A', '#B9E39A', 1.1); for (var ck = 0; ck < 4; ck++) cone(ch, '#3E8A62', 0.05, 0.1, 0, -0.36 - ck * 0.02, -0.1 - ck * 0.1, -0.5);
+        H('#4FA67A', 1, 0.85, 1); sph(head, '#6CC08F', 0, -0.13, 0.42, 0.27, 0.13, 0.32);
+        both(function (m) { for (var k = 0; k < 4; k++) cone(head, '#FFFFFF', 0.02, 0.05, m * 0.22, -0.23, 0.36 + k * 0.1, Math.PI); });
+        nostrils('#2F7A52', 0.07, -0.02, 0.72, 0.03);
+        both(function (m) { sph(head, '#4FA67A', m * 0.18, 0.32, 0.12, 0.13, 0.11, 0.13); eyeGroup(m * 0.18, 0.35, 0.23, function (g) { sph(g, '#FFF7C2', 0, 0, 0, 0.075, 0.075, 0.04); sph(g, INK, 0, 0, 0.03, 0.02, 0.06, 0.02); }); });
+        cheeks(0.34, -0.1); parts.tail = tailGroup(0, -0.66, -0.3); tube(parts.tail, '#4FA67A', [[0, 0, 0], [0, -0.1, -0.2], [0.04, -0.2, -0.46]], 0.09); break;
+      case 'snake':
+        var c1 = mesh(new T.TorusGeometry(0.32, 0.13, 12, 32), '#FFB020'); c1.rotation.x = Math.PI / 2; c1.position.y = -0.82; ch.add(c1);
+        var c2 = mesh(new T.TorusGeometry(0.2, 0.12, 12, 28), '#FFB020'); c2.rotation.x = Math.PI / 2; c2.position.y = -0.62; ch.add(c2);
+        [0, 1, 2, 3, 4, 5].forEach(function (k) { var a = k / 6 * Math.PI * 2 + 0.3; sph(ch, '#E2683C', Math.sin(a) * 0.44, -0.78, Math.cos(a) * 0.44, 0.05, 0.05, 0.05); });
+        tube(ch, '#FFB020', [[0, -0.6, 0.05], [0, -0.45, 0.1], [0, -0.3, 0.06]], 0.13);
+        H('#FFB020', 1.05, 0.88, 1); [[0, 0.32], [-0.17, 0.25], [0.17, 0.25]].forEach(function (p) { stick('#E2683C', p[0], p[1], 0.06, 0.06, 0.015, Math.PI / 4); });
+        tube(head, '#FF3B5C', [[0, -0.2, 0.42], [0, -0.24, 0.58]], 0.015, false); both(function (m) { tube(head, '#FF3B5C', [[0, -0.24, 0.58], [m * 0.04, -0.27, 0.64]], 0.013); });
+        eyes(0.2, 0.06, 0.07); smile(-0.12, 0.44, 0.14); cheeks(0.32, -0.08); break;
+      case 'chameleon':
+        body('#3FD3A0', '#C9F2DE'); H('#3FD3A0'); sph(head, '#2FB386', 0, 0.42, -0.08, 0.07, 0.22, 0.3);
+        [-0.3, 0, 0.3].forEach(function (x0) { stick('#FFD84D', x0, -0.22, 0.04, 0.12, 0.015); }); [[-0.2, 0.3], [0.22, 0.32]].forEach(function (p) { stick('#FF9DBF', p[0], p[1], 0.035, 0.035, 0.01); });
+        both(function (m) { eyeGroup(m * 0.34, 0.08, 0.24, function (g) { sph(g, '#2FB386', 0, 0, 0, 0.16); var rr = mesh(new T.TorusGeometry(0.1, 0.015, 8, 24), '#1E9A70'); rr.position.z = 0.13; g.add(rr); sph(g, INK, m * 0.02, m * 0.02, 0.15, 0.045, 0.045, 0.03, true); }); });
+        smile(-0.12, 0.46, 0.2); cheeks(0.36, -0.12);
+        parts.tail = tailGroup(0, -0.7, -0.34); var cur = mesh(new T.TorusGeometry(0.12, 0.045, 8, 24, Math.PI * 1.7), '#3FD3A0'); cur.rotation.y = Math.PI / 2; cur.position.set(0, 0.0, -0.08); parts.tail.add(cur); break;
+      case 'axolotl':
+        body('#FFC2D6', '#FFE0EA'); H('#FFC2D6', 1.15, 0.9, 1);
+        both(function (m) { var g = new T.Group(); g.position.set(m * 0.48, 0.02, -0.04); [[0.2, 0.22], [0.28, 0], [0.2, -0.2]].forEach(function (p) { tube(g, '#FF6F91', [[0, 0, 0], [m * p[0], p[1], -0.05]], 0.03); sph(g, '#FF6F91', m * p[0], p[1], -0.05, 0.06); sph(g, '#FF6F91', m * p[0] * 0.55, p[1] * 0.55, -0.03, 0.045); }); head.add(g); parts.ears.push(g); });
+        [[-0.18, 0.3], [0.2, 0.32], [0, 0.4]].forEach(function (p) { stick('#FF9DBF', p[0], p[1], 0.03, 0.03, 0.01); });
+        eyes(0.26, 0.04, 0.045); smile(-0.02, 0.46, 0.2); cheeks(0.38, -0.08, 0.56);
+        parts.tail = tailGroup(0, -0.62, -0.3); var af = sph(parts.tail, '#FFC2D6', 0, 0, -0.14, 0.04, 0.12, 0.2); af.rotation.x = 0.3; break;
+      case 'flamingo':
+        body('#FF8FB1', '#FFC2D6'); both(function (m) { var w = sph(ch, '#FF6F9A', m * 0.32, -0.58, -0.05, 0.08, 0.18, 0.22); w.rotation.z = m * 0.2; });
+        H('#FF8FB1'); cone(head, '#FF8FB1', 0.04, 0.16, -0.04, 0.54, 0, 0, 0.35); cone(head, '#FF8FB1', 0.04, 0.14, 0.05, 0.53, -0.02, 0, -0.35);
+        tube(head, '#FFE0B0', [[0, -0.02, 0.44], [0, -0.04, 0.58], [0, -0.14, 0.66]], 0.07); tube(head, INK, [[0, -0.17, 0.66], [0, -0.28, 0.6]], 0.06);
+        irisEyes(0.2, 0.1, 0.05, '#FFFFFF'); cheeks(0.3, -0.06);
+        parts.tail = sph(ch, '#FF6F9A', 0, -0.5, -0.34, 0.08, 0.06, 0.14); break;
+      case 'parrot':
+        body('#FF4D4D', '#FFD84D'); both(function (m) { var w = sph(ch, '#4F7BFF', m * 0.32, -0.6, -0.04, 0.08, 0.2, 0.2); w.rotation.z = m * 0.15; });
+        H('#FF4D4D'); both(function (m) { stick('#FFFFFF', m * 0.18, 0.06, 0.1, 0.1, 0.025); });
+        eyes(0.18, 0.07, 0.05); sph(head, '#3A3442', 0, -0.2, 0.44, 0.08, 0.05, 0.06);
+        tube(head, '#F7E9D0', [[0, 0.02, 0.46], [0, 0, 0.58], [0, -0.1, 0.63], [0, -0.21, 0.57]], 0.07);
+        cone(head, '#FFD84D', 0.05, 0.2, -0.06, 0.56, 0, 0, 0.35); cone(head, '#4F7BFF', 0.05, 0.22, 0.02, 0.58, -0.04, 0, 0); cone(head, '#3FD3A0', 0.045, 0.18, 0.09, 0.55, -0.06, 0, -0.35);
+        cheeks(0.3, -0.12);
+        parts.tail = tailGroup(0, -0.6, -0.3); [['#4F7BFF', -0.05], ['#FF4D4D', 0], ['#FFD84D', 0.05]].forEach(function (f) { var t = sph(parts.tail, f[0], f[1], -0.12, -0.12, 0.04, 0.24, 0.04); t.rotation.x = -0.5; }); break;
+      case 'peacock':
+        var fan = new T.Group(); fan.position.set(0, -0.35, -0.42); fan.rotation.x = -0.25; ch.add(fan);
+        for (var pk = 0; pk < 9; pk++) { var pa = -1.25 + pk / 8 * 2.5, px = Math.sin(pa) * 0.82, py = Math.cos(pa) * 0.82; tube(fan, '#2FB386', [[0, 0, 0], [px * 0.85, py * 0.85, 0]], 0.012, false); sph(fan, '#2FB386', px, py, 0, 0.14, 0.18, 0.04); sph(fan, '#FFD84D', px, py, 0.03, 0.08, 0.1, 0.03); sph(fan, '#4F7BFF', px, py, 0.05, 0.055, 0.065, 0.025); sph(fan, '#1E2E7A', px, py, 0.065, 0.028, 0.033, 0.015); }
+        body('#2E7DD7', '#3FB5A0'); H('#2E7DD7'); [-0.08, 0, 0.08].forEach(function (dx) { tube(head, '#2E5FB8', [[dx * 0.5, 0.45, 0], [dx, 0.68, 0.02]], 0.012, false); sph(head, '#4F7BFF', dx, 0.7, 0.02, 0.04); });
+        both(function (m) { stick('#FFFFFF', m * 0.18, 0.07, 0.11, 0.06, 0.02); }); eyes(0.18, 0.07, 0.05);
+        cone(head, '#F3E3C3', 0.05, 0.13, 0, -0.08, 0.55, Math.PI / 2); cheeks(0.3, -0.1); break;
+      case 'duck':
+        body('#C9C2B4', '#B9814A'); both(function (m) { var w = sph(ch, '#9A8F7E', m * 0.32, -0.6, -0.04, 0.08, 0.17, 0.2); w.rotation.z = m * 0.15; sph(ch, '#FF9A3D', m * 0.16, -0.92, 0.12, 0.11, 0.035, 0.15); });
+        H('#2F9E5A'); var ring = mesh(new T.TorusGeometry(0.28, 0.035, 8, 28), '#FFFFFF'); ring.rotation.x = Math.PI / 2; ring.position.set(0, -0.42, 0); head.add(ring);
+        sph(head, '#FFC23D', 0, -0.12, 0.46, 0.19, 0.06, 0.18); nostrils(INK, 0.05, -0.07, 0.6, 0.012); eyes(0.19, 0.1, 0.055);
+        parts.tail = tailGroup(0, -0.45, -0.32); var curl = mesh(new T.TorusGeometry(0.05, 0.015, 6, 16, Math.PI * 1.4), INK); curl.rotation.y = Math.PI / 2; parts.tail.add(curl); break;
+      case 'swan':
+        body('#FFFFFF', '#FFFFFF'); both(function (m) { var w = sph(ch, '#F4F1EA', m * 0.3, -0.55, -0.08, 0.1, 0.2, 0.26); w.rotation.z = m * 0.2; sph(ch, '#FF8A3D', m * 0.16, -0.92, 0.12, 0.1, 0.035, 0.14); });
+        H('#FFFFFF'); sph(head, '#FF8A3D', 0, -0.13, 0.5, 0.1, 0.08, 0.16); sph(head, INK, 0, -0.03, 0.46, 0.06);
+        eyes(0.19, 0.09, 0.05); cheeks(0.3, -0.08);
+        var crown = new T.Group(); crown.position.set(0, 0.46, 0); var gold = M('#FFD84D', true);
+        var band = new T.Mesh(new T.CylinderGeometry(0.16, 0.14, 0.08, 20, 1, true), gold); band.material.side = T.DoubleSide; crown.add(band);
+        for (var ck2 = 0; ck2 < 5; ck2++) { var ca = ck2 / 5 * Math.PI * 2, sp = new T.Mesh(new T.ConeGeometry(0.035, 0.1, 10), gold); sp.position.set(Math.sin(ca) * 0.15, 0.09, Math.cos(ca) * 0.15); crown.add(sp); }
+        sph(crown, '#FF7AA8', 0, 0.02, 0.15, 0.025); head.add(crown); break;
+      case 'toucan':
+        body('#26304A', '#FFF3C9'); H('#26304A'); sph(head, '#FFF3C9', 0, -0.18, 0.24, 0.34, 0.24, 0.28);
+        both(function (m) { stick('#4F9BFF', m * 0.21, 0.13, 0.1, 0.1, 0.03); }); eyes(0.21, 0.13, 0.05);
+        sph(head, '#FF9A3D', 0, -0.06, 0.62, 0.12, 0.14, 0.3); sph(head, '#FFD84D', 0, 0.0, 0.5, 0.1, 0.12, 0.14); sph(head, '#FF4D4D', 0, -0.1, 0.86, 0.07, 0.08, 0.08);
+        var bm = mesh(new T.BoxGeometry(0.245, 0.01, 0.5), INK); bm.position.set(0, -0.07, 0.64); head.add(bm);
+        parts.tail = sph(ch, '#26304A', 0, -0.68, -0.34, 0.08, 0.14, 0.06); break;
+      case 'eagle':
+        body('#6B4A33', '#8A6448'); both(function (m) { var w = sph(ch, '#6B4A33', m * 0.34, -0.55, -0.06, 0.1, 0.24, 0.24); w.rotation.z = m * 0.2; sph(ch, '#FFC23D', m * 0.16, -0.92, 0.12, 0.1, 0.04, 0.13); });
+        H('#FFFFFF'); both(function (m) { stick(INK, m * 0.17, 0.19, 0.11, 0.025, 0.02, m * 0.35); }); irisEyes(0.17, 0.07, 0.06, '#FFD84D');
+        sph(head, '#FFC23D', 0, -0.07, 0.46, 0.12, 0.11, 0.13); tube(head, '#FFC23D', [[0, -0.03, 0.56], [0, -0.1, 0.62], [0, -0.2, 0.58]], 0.045);
+        parts.tail = sph(ch, '#FFFFFF', 0, -0.7, -0.34, 0.12, 0.05, 0.12); break;
+      case 'bat':
+        body('#4A3A66', '#6E5A8C'); both(function (m) { var g = new T.Group(); g.position.set(m * 0.28, -0.48, -0.06); g.rotation.z = -m * 0.25; var wgm = sph(g, '#4A3A66', m * 0.36, 0.12, 0, 0.4, 0.26, 0.03); [0, 1, 2].forEach(function (k) { tube(g, '#3A2C52', [[0, 0, 0.02], [m * (0.3 + k * 0.17), 0.36 - k * 0.2, 0.02]], 0.015, false); }); ch.add(g); parts.ears.push(g); });
+        H('#6E5A8C'); earCone('#6E5A8C', '#FFB3C7', 0.26, 0.32, 0.15, 0.42, 0.3); sph(head, '#8E7AAE', 0, -0.08, 0.24, 0.36, 0.3, 0.3);
+        eyes(0.16, 0.06, 0.065); nose('#FF6F91', -0.08, 0.5, 0.03); both(function (m) { cone(head, '#FFFFFF', 0.022, 0.06, m * 0.05, -0.25, 0.45, Math.PI); }); smile(-0.17, 0.48, 0.07); cheeks(0.3, -0.12); break;
+      case 'bee':
+        body('#FFD84D', null); bands(ch, INK, -0.62, -0.02, 0.33, 0.3, 0.3, [0.12, 0.0, -0.12]);
+        var wingM = new T.MeshPhysicalMaterial({ color: new T.Color('#EAF3FF'), roughness: 0.1, transparent: true, opacity: 0.75, clearcoat: 1 });
+        both(function (m) { var g = new T.Group(); g.position.set(m * 0.15, -0.36, -0.26); g.rotation.z = -m * 0.5; var w = new T.Mesh(SG, wingM); w.scale.set(0.12, 0.24, 0.02); w.position.set(m * 0.06, 0.2, 0); g.add(w); var w2 = new T.Mesh(SG, wingM); w2.scale.set(0.09, 0.16, 0.02); w2.position.set(m * 0.16, 0.06, -0.02); g.add(w2); ch.add(g); parts.ears.push(g); });
+        parts.tail = cone(ch, INK, 0.04, 0.12, 0, -0.66, -0.36, -Math.PI / 2);
+        H('#FFD84D'); both(function (m) { tube(head, INK, [[m * 0.12, 0.42, 0.05], [m * 0.2, 0.62, 0.1], [m * 0.26, 0.7, 0.12]], 0.015, false); sph(head, INK, m * 0.26, 0.72, 0.12, 0.05); });
+        eyes(0.17, 0.06, 0.07); smile(-0.12, 0.47, 0.1); cheeks(0.3, -0.08); break;
+      case 'snail':
+        sph(ch, '#B8E08A', 0, -0.84, 0.08, 0.3, 0.09, 0.5); sph(ch, '#FF9A4D', 0, -0.42, -0.24, 0.22, 0.38, 0.38);
+        both(function (m) { [0.26, 0.15, 0.06].forEach(function (r, k) { var t = mesh(new T.TorusGeometry(r, 0.025, 8, 28), '#E2683C'); t.rotation.y = Math.PI / 2; t.position.set(m * (0.2 + k * 0.012), -0.42 + k * 0.03, -0.24 + k * 0.02); ch.add(t); }); });
+        head.position.set(0, -0.3, 0.26); head.scale.setScalar(0.78); H('#B8E08A');
+        both(function (m) { tube(head, '#B8E08A', [[m * 0.12, 0.35, 0.1], [m * 0.18, 0.72, 0.14]], 0.04, false); eyeGroup(m * 0.18, 0.78, 0.16, function (g) { sph(g, '#FFFFFF', 0, 0, 0, 0.09); sph(g, INK, 0, 0, 0.06, 0.05, 0.05, 0.04, true); sph(g, '#FFFFFF', 0.015, 0.02, 0.1, 0.015); }); });
+        smile(-0.08, 0.47, 0.12); cheeks(0.3, -0.06); break;
+      case 'hamster':
+        body('#F2B36B', '#FFF6EC', 1.15); H('#F2B36B', 1.08, 1, 1);
+        both(function (m) { sph(head, '#FFF6EC', m * 0.25, -0.15, 0.22, 0.24, 0.2, 0.22); }); muzzle('#FFF6EC', 0.12, 0.09, -0.1, 0.4); nose('#FF6F91', -0.06, 0.5, 0.03);
+        var ht = mesh(new T.BoxGeometry(0.05, 0.05, 0.02), '#FFFFFF'); ht.position.set(0, -0.2, 0.47); head.add(ht);
+        stick('#FFF6EC', 0, 0.25, 0.04, 0.1, 0.02); eyes(0.17, 0.1, 0.055); earRound('#F2B36B', '#FFB3C7', 0.3, 0.36, 0.09); cheeks(0.34, -0.06, 0.56); break;
+      case 'dragon':
+        body('#8E6CE0', '#B9A2F0'); for (var dk = 0; dk < 3; dk++) cone(ch, '#3FD3A0', 0.05, 0.1, 0, -0.36, -0.12 - dk * 0.1, -0.5);
+        both(function (m) { var g = new T.Group(); g.position.set(m * 0.2, -0.42, -0.24); g.rotation.z = -m * 0.4; sph(g, '#3FD3A0', m * 0.2, 0.16, 0, 0.24, 0.18, 0.03); tube(g, '#6B4FC0', [[0, 0, 0.02], [m * 0.3, 0.3, 0.02]], 0.02, false); ch.add(g); parts.ears.push(g); });
+        H('#8E6CE0'); both(function (m) { tube(head, '#FFB020', [[m * 0.16, 0.38, -0.04], [m * 0.24, 0.55, -0.14]], 0.045, false); cone(head, '#FFB020', 0.045, 0.14, m * 0.27, 0.62, -0.2, -0.7, -m * 0.5); var fin2 = cone(head, '#3FD3A0', 0.09, 0.22, m * 0.5, 0.08, -0.04, 0, -m * 1.3); fin2.scale.z = 0.3; });
+        cone(head, '#3FD3A0', 0.05, 0.12, 0, 0.53, 0.06); muzzle('#B9A2F0', 0.22, 0.15, -0.15, 0.34); nostrils('#4A3A86', 0.07, -0.1, 0.49);
+        cone(head, '#FFFFFF', 0.022, 0.06, 0.08, -0.28, 0.42, Math.PI); eyes(0.17, 0.08, 0.065); cheeks(0.31, -0.08);
+        parts.tail = tailGroup(0, -0.66, -0.3); tube(parts.tail, '#8E6CE0', [[0, 0, 0], [0, -0.1, -0.18], [0.08, -0.16, -0.38]], 0.06); cone(parts.tail, '#3FD3A0', 0.08, 0.14, 0.1, -0.17, -0.48, -Math.PI / 2); break;
       default:
         body('#FF9FB8'); H('#FF9FB8'); eyes(0.17, 0.07, 0.065);
     }

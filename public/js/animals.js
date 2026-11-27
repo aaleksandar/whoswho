@@ -4,6 +4,10 @@
 export const ANIMALS = [
   'fox', 'cat', 'bear', 'rabbit', 'frog', 'panda', 'owl', 'pig', 'lion', 'tiger', 'monkey',
   'penguin', 'dog', 'mouse', 'raccoon', 'koala', 'elephant', 'hedgehog', 'sheep', 'cow', 'chick', 'unicorn',
+  'deer', 'moose', 'giraffe', 'zebra', 'horse', 'donkey', 'llama', 'camel', 'goat', 'hippo', 'rhino',
+  'gorilla', 'sloth', 'otter', 'beaver', 'squirrel', 'badger', 'wolf', 'polarbear', 'redpanda', 'kangaroo', 'platypus',
+  'seal', 'whale', 'shark', 'octopus', 'crab', 'turtle', 'crocodile', 'snake', 'chameleon', 'axolotl', 'flamingo',
+  'parrot', 'peacock', 'duck', 'swan', 'toucan', 'eagle', 'bat', 'bee', 'snail', 'hamster', 'dragon',
 ];
 
 export const PALETTE = {
@@ -15,11 +19,12 @@ export const PALETTE = {
 };
 export const COLORS = Object.keys(PALETTE);
 
-// Animals from the old 2D avatar set that the 3D zoo doesn't have.
-const LEGACY = { bunny: 'rabbit', puppy: 'dog', parrot: 'chick', sloth: 'koala', redpanda: 'fox', axolotl: 'frog' };
+// Animals from the old 2D avatar set under another name.
+const LEGACY = { bunny: 'rabbit', puppy: 'dog' };
 const LEGACY_BG = { peach: 'orange', lemon: 'yellow', mint: 'mint', sky: 'blue', blue: 'blue', lavender: 'pink', pink: 'pink', coral: 'orange', teal: 'mint', grape: 'blue' };
 
-export const animalLabel = (id) => id.charAt(0).toUpperCase() + id.slice(1);
+const LABELS = { polarbear: 'Polar bear', redpanda: 'Red panda' };
+export const animalLabel = (id) => LABELS[id] || id.charAt(0).toUpperCase() + id.slice(1);
 
 function hash(str) {
   let h = 0x811c9dc5;
