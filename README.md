@@ -4,7 +4,7 @@ A guest board for parties and meetups, hosted on your laptop and reachable from 
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
   - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves.
-  - **The Cloud:** every fun thing guests say is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, and *Arrange the sky* switches between **Drift** and **By vibe**.
+  - **The Cloud:** every fun thing guests say is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, One at a time, a cloud floats to the front and its words show big enough to read across the room.
   - **Wishes:** "what do you need in life right now?" Every wish rises as its own lantern over the night skyline, with the guest's name, so people who can help go and say hi. Guests can send as many as they like, and the lanterns keep rising on a loop.
 - **`/hi`** is for phones. Join with a name, a postcode and a spirit animal (66 to pick from), then **say something fun about you** and send **wishes**, as many as you like.
 - **`/hax0r`** is the admin page: edit or delete guests, delete individual lanterns, read and delete fun things (it shows who sent what), change display settings, reset the event.

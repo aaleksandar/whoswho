@@ -1,21 +1,16 @@
-// The Cloud: every secret is a 3D cloud whose weather comes from its words.
-// Anonymous: no names anywhere on this screen. Clouds drift, or cluster by
-// by vibe.
+// The Cloud: every fun thing guests said is a 3D cloud whose weather comes
+// from its words. One at a time, a cloud floats to the front and its words
+// show big enough to read across the room. Anonymous: no names on this screen.
 
 import { h } from '../dom.js';
 import { VIBES, groups, forecast, dominant } from '../weather.js';
 
-const MODES = [['drift', 'Drift'], ['vibe', 'By vibe']];
-const MAX_CLOUDS = 35; // the drift layout holds 7 × 5; older secrets still count in the legend
-const SPOT_MS = 4500;
-const MODE_MS = 20000;
-const HOLD_MS = 12000;
-const MODE_HOLD_MS = 40000;
+const MAX_CLOUDS = 35; // in the sky at once; older ones still count in the legend
+const FOCUS_MS = 9000; // each fun thing's turn at the front
+const HOLD_MS = 15000; // after someone taps a cloud, or a new one arrives
 
 export function createCloudView(root, { geo, onInteract }) {
-  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches what the secret is about' });
-  const labelsEl = h('div.cw-lbls', { 'aria-label': 'Secrets in the cloud' });
-  const groupsEl = h('div', { 'aria-hidden': 'true' });
+  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches its words' });
   const toast = h('div.cw-toast.off', { role: 'status' });
   const spotQ = h('q');
   const spotChip = h('span');
@@ -23,36 +18,24 @@ export function createCloudView(root, { geo, onInteract }) {
   const forecastEl = h('p');
   const chips = h('div.cw-chips');
   const countEl = h('b', '0');
-  const seg = h('div.cw-seg', { role: 'group', 'aria-label': 'Arrange clouds' });
   root.append(
-    canvas, labelsEl, groupsEl, toast, spot,
+    canvas, toast, spot,
     h('header.cw-top',
       h('div.paper-plate.cw-plate', h('h1', 'The Cloud'), forecastEl, chips),
       h('div.mz-stats',
         h('div.paper-stat', countEl, h('span', 'fun things')),
         h('div.paper-stat', h('b', '0'), h('span', 'names shown'))),
     ),
-    h('div.cw-ctl', h('small', 'Arrange the sky'), seg),
   );
 
-  let clouds = []; // shown in 3D: {id, t, by, vibe}
-  let all = []; // every secret, for legend + forecast
-  let mode = 'drift';
+  let clouds = []; // in the sky: {id, t, by, vibe}
+  let all = []; // every fun thing, for the legend and forecast
   let spotId = null;
   let touched = 0;
-  let modeTouched = 0;
   let engine = null;
   let visible = false;
-  let timers = [];
+  let timer = null;
   let toastT;
-  const labelEls = {};
-  const groupEls = {};
-
-  const setMode = (m, byHand) => {
-    if (byHand) { modeTouched = Date.now(); onInteract?.(); }
-    mode = m;
-    render();
-  };
 
   function boot() {
     if (engine || !window.THREE || !window.WWCloud) return;
@@ -60,34 +43,11 @@ export function createCloudView(root, { geo, onInteract }) {
       vibes: VIBES,
       groups,
       boroughs: geo.boroughs,
-      labelTop: 300,
-      labels: () => labelEls,
-      groupEls: () => groupEls,
       getSpot: () => spotId,
-      onPick: (id) => { touched = Date.now(); spotId = id; renderSpot(); onInteract?.(); },
+      onPick: (id) => { if (id) { touched = Date.now(); focus(id); onInteract?.(); } },
     });
     render();
     engine.snap();
-  }
-
-  function renderLabels() {
-    const ids = new Set(clouds.map((c) => c.id));
-    for (const id of Object.keys(labelEls)) if (!ids.has(id)) { labelEls[id].remove(); delete labelEls[id]; }
-    for (const c of clouds) {
-      if (!labelEls[c.id]) {
-        labelEls[c.id] = h('p.cw-lbl', c.t);
-        labelsEl.append(labelEls[c.id]);
-      }
-    }
-  }
-
-  function renderGroups() {
-    const list = mode === 'drift' ? [] : groups(clouds, mode);
-    for (const k of Object.keys(groupEls)) { groupEls[k].remove(); delete groupEls[k]; }
-    for (const g of list) {
-      groupEls[g.key] = h('div.cw-grp', h('i', { style: { background: g.color } }), g.label, h('b', g.count));
-      groupsEl.append(groupEls[g.key]);
-    }
   }
 
   function renderSpot() {
@@ -96,8 +56,24 @@ export function createCloudView(root, { geo, onInteract }) {
     if (!c) return;
     const v = VIBES[c.vibe] || VIBES.mist;
     spotQ.textContent = c.t;
+    // shorter words get bigger type
+    spot.dataset.len = c.t.length > 90 ? 'long' : c.t.length > 45 ? 'mid' : 'short';
     spotChip.textContent = `${v.weather} · ${v.name}`;
     spotChip.style.background = v.cloud;
+  }
+
+  function focus(id) {
+    spotId = id;
+    // replay the card's entrance so each turn reads as new
+    spot.classList.add('off');
+    void spot.offsetWidth;
+    renderSpot();
+  }
+
+  function next() {
+    if (!clouds.length) return focus(null);
+    const i = clouds.findIndex((c) => c.id === spotId);
+    focus(clouds[(i + 1) % clouds.length].id);
   }
 
   function render() {
@@ -108,43 +84,16 @@ export function createCloudView(root, { geo, onInteract }) {
     chips.replaceChildren(
       ...groups(all, 'vibe').map((g) => h('span.cw-chip', h('i', { style: { background: g.color } }), g.label, ' ', h('b', g.count))),
     );
-    seg.replaceChildren(
-      ...MODES.map(([id, label]) =>
-        h('button', { type: 'button', class: mode === id ? 'on' : '', 'aria-pressed': String(mode === id), onclick: () => setMode(id, true) }, label)),
-    );
-    renderLabels();
-    renderGroups();
     renderSpot();
     if (engine) {
-      engine.sync(clouds, mode);
+      engine.sync(clouds, 'drift');
       engine.setSky(sky[1]);
     }
   }
 
-  function arrival(secret) {
-    const v = VIBES[secret.vibe] || VIBES.mist;
-    toast.textContent = `Something fun just floated in: ${v.weather} · ${v.name}`;
-    toast.classList.remove('off');
-    clearTimeout(toastT);
-    toastT = setTimeout(() => toast.classList.add('off'), 4000);
-    spotId = `s${secret.id}`;
-    touched = Date.now();
-    renderSpot();
-  }
-
-  function start() {
-    let k = 0;
-    timers.push(setInterval(() => {
-      if (Date.now() - touched < HOLD_MS || !clouds.length) return;
-      k++;
-      spotId = k % 2 ? clouds[Math.floor(Math.random() * clouds.length)].id : null;
-      renderSpot();
-    }, SPOT_MS));
-    timers.push(setInterval(() => {
-      if (Date.now() - modeTouched < MODE_HOLD_MS) return;
-      const order = MODES.map((m) => m[0]);
-      setMode(order[(order.indexOf(mode) + 1) % order.length]);
-    }, MODE_MS));
+  function tick() {
+    if (Date.now() - touched < HOLD_MS) return;
+    next();
   }
 
   return {
@@ -154,12 +103,20 @@ export function createCloudView(root, { geo, onInteract }) {
       all = secrets;
       clouds = secrets.slice(-MAX_CLOUDS).map((s) => ({ id: `s${s.id}`, t: s.text, by: s.by, vibe: s.vibe }));
       if (spotId && !clouds.some((c) => c.id === spotId)) spotId = null;
+      if (!spotId && clouds.length) spotId = clouds[clouds.length - 1].id;
       render();
     },
 
-    /** A secret just arrived: toast it and put it in the spotlight. */
+    /** Something fun just arrived: toast it and bring it to the front. */
     highlight(secret) {
-      if (secret) arrival(secret);
+      if (!secret) return;
+      const v = VIBES[secret.vibe] || VIBES.mist;
+      toast.textContent = `Something fun just floated in: ${v.weather} · ${v.name}`;
+      toast.classList.remove('off');
+      clearTimeout(toastT);
+      toastT = setTimeout(() => toast.classList.add('off'), 4000);
+      touched = Date.now();
+      focus(`s${secret.id}`);
     },
 
     /** Build the 3D scene early (compiles shaders), then sleep until shown. */
@@ -172,15 +129,13 @@ export function createCloudView(root, { geo, onInteract }) {
       visible = true;
       boot();
       engine?.resume();
-      timers.forEach(clearInterval);
-      timers = [];
-      start();
+      clearInterval(timer);
+      timer = setInterval(tick, FOCUS_MS);
     },
 
     hide() {
       visible = false;
-      timers.forEach(clearInterval);
-      timers = [];
+      clearInterval(timer);
       engine?.pause();
     },
   };

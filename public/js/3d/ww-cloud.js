@@ -1,5 +1,7 @@
 // WhosWho · The Cloud in 3D. Every secret is a cloud whose weather comes from its words.
 // WWCloud.create(canvas, {vibes, groups, boroughs, labels(), groupEls(), getSpot(), onPick(id)})
+// getSpot() names the cloud in focus: it floats to the front, big, and the rest
+// drift back into the haze.
 (function () {
   var C = window.WWCloud = {};
 
@@ -143,22 +145,29 @@
     };
     canvas.addEventListener('pointerdown', onDown); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
 
+    var look = new T.Vector3(0, 2.2, -3), fpos = new T.Vector3(), back = new T.Vector3();
     var v = new T.Vector3(), last = performance.now(), raf = 0, running = true, skyNow = new T.Color(0xF4F2FB), skyWant = new T.Color(0xF4F2FB);
     var loop = function (now) {
       if (!running) return;
       raf = requestAnimationFrame(loop);
       var dt = Math.min(0.05, (now - last) / 1000); last = now; var t = now / 1000;
       th += ((Math.sin(t * 0.07) * 0.12 + drag) - th) * Math.min(1, dt * 2);
-      cam.position.set(Math.sin(th) * 26, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * 26 - 2); cam.lookAt(0, 2.2, -3);
+      cam.position.set(Math.sin(th) * 26, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * 26 - 2); cam.lookAt(look);
+      // the focus spot sits halfway to the camera, a little above the line of sight
+      fpos.copy(look).lerp(cam.position, 0.5); fpos.y += 1.9;
       skyNow.lerp(skyWant, Math.min(1, dt * 1.5)); scene.fog.color.copy(skyNow);
-      var spot = o.getSpot ? o.getSpot() : null, k = 1 - Math.exp(-dt * 1.4);
+      var spot = o.getSpot ? o.getSpot() : null, k = 1 - Math.exp(-dt * 1.4), kf = 1 - Math.exp(-dt * 2.4);
+      if (spot && !objs[spot]) spot = null;
       Object.keys(objs).forEach(function (id) {
-        var ob = objs[id];
-        ob.pos.lerp(ob.target, k);
-        var want = ob.ts * (spot === id ? 1.45 : 1);
+        var ob = objs[id], f = spot === id;
+        if (f) ob.pos.lerp(fpos, kf);
+        else if (spot) ob.pos.lerp(back.copy(ob.target).setZ(ob.target.z - 7), k);
+        else ob.pos.lerp(ob.target, k);
+        var want = ob.ts * (f ? 1.9 : spot ? 0.85 : 1);
         ob.s += (want - ob.s) * Math.min(1, dt * 3);
-        ob.root.position.set(ob.pos.x + Math.sin(t * 0.3 + ob.ph) * 0.25, ob.pos.y + Math.sin(t * 0.5 + ob.ph) * 0.22, ob.pos.z);
-        ob.root.scale.setScalar(ob.s); ob.root.rotation.y = Math.sin(t * 0.2 + ob.ph) * 0.15;
+        var sway = f ? 0.35 : 1;
+        ob.root.position.set(ob.pos.x + Math.sin(t * 0.3 + ob.ph) * 0.25 * sway, ob.pos.y + Math.sin(t * 0.5 + ob.ph) * 0.22 * sway, ob.pos.z);
+        ob.root.scale.setScalar(ob.s); ob.root.rotation.y = Math.sin(t * 0.2 + ob.ph) * 0.15 * sway;
         if (ob.fx.update) ob.fx.update(t, ob.ph);
       });
       r.render(scene, cam);
