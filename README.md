@@ -2,11 +2,31 @@
 
 A guest board for parties and meetups, hosted on your laptop and reachable from every device on the local network.
 
-- **`/home`** is the big-screen display. It rotates between a **connection graph** (people linked by shared vibes), a **map** of London inside the M25, and a **needs** board of comic speech bubbles. A QR code in the corner points to `/hi`.
-- **`/hi`** is guest registration, built for phones: name, a spirit animal (15 animals plus glasses, a hat and a background colour), a few lines about yourself, vibes (tap suggestions or add your own), what you need in life, and a postcode.
-- **`/hax0r`** is the admin page: edit or delete guests, change display settings, reset the event.
+- **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
+  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from animal to animal, and a card shows the secrets tied to each person.
+  - **The Cloud:** every secret is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, and *Arrange the sky* switches between **Drift**, **By vibe** and **By voice** (in their own words vs. overheard by friends).
+  - **Wishes:** "what do you need in life?" Every wish rises as a lantern over the night skyline, with the guest's name, so people who can help go and say hi.
+- **`/hi`** is for phones. Join with a name, a postcode and a spirit animal (22 to pick from), then drop as many **secrets** (about yourself or about someone here) and a **wish** as you like.
+- **`/hax0r`** is the admin page: edit or delete guests, read and delete secrets (it shows who sent what), change display settings, reset the event.
 
-Everything is stored in a single SQLite file, so a restart loses nothing. New registrations appear on the display instantly via Server-Sent Events.
+Everything is stored in a single SQLite file, so a restart loses nothing. New guests, secrets and wishes reach the display instantly via Server-Sent Events, and the display jumps to show them: the Map flies to a new animal, the Cloud spotlights a new secret, a new lantern rises from the rooftops. To stop it jumping around, it makes at most one jump every 25 seconds.
+
+### The weather of secrets
+
+Each secret is sorted when it arrives, by keywords in `public/js/weather.js` (first match wins):
+
+| Weather | Vibe | Triggered by words like |
+|---|---|---|
+| Drizzle | Tender | can't, cried, lost, scared |
+| Giggly | Hilarious | teapot, socks, tattoo, dressed as, karaoke |
+| Sunny | Wanderlust | countries, hitchhiked, boat, travel, moved to |
+| Thunder | Superpowers | languages, record, champion, marathon, juggle |
+| Rainbows | Creative | piano, music, DJ, novel, film, sing |
+| Warm front | Foodies | cook, supper, bake, coffee, wine |
+| Breezy | Outdoorsy | farm, bees, garden, surf, swim, hike |
+| Misty | Mysterious | anything else |
+
+Add words there to tune it; the server and the display share the file.
 
 ## Quick start
 
@@ -27,7 +47,7 @@ Open the Display URL on the TV or projector and press **F** for fullscreen. Gues
 
 > **macOS:** the first time, you may be asked whether to let `node` accept incoming connections. Click **Allow**, or phones won't be able to connect.
 
-Want something to look at first? `npm run seed` adds 20 sample guests (`npm run seed -- --clear` wipes existing guests first).
+Want something to look at first? `npm run seed` adds 22 sample guests with their secrets and wishes (`npm run seed -- --clear` wipes existing guests first).
 
 ## Configuration
 
@@ -42,22 +62,26 @@ Settings come from environment variables, or from a `.env` file in the project f
 
 Set the event title, the seconds each view stays on screen, and which views are in rotation from `/hax0r`. Changes apply to the display live.
 
-**Display controls:** click a view's tab (Connections · Map · Needs) to jump to it; the timer restarts and auto-rotation carries on. Keys: `←` `→` switch view · `Space` pause · `F` fullscreen · `Esc` clear a selection. The cursor hides after 3 s.
+**Display controls:** click a view's tab (The Map · The Cloud · Wishes) to jump to it; the timer restarts and auto-rotation carries on. Keys: `←` `→` switch view · `Space` pause (also stops the jumps to new arrivals) · `F` fullscreen. The cursor hides after 3 s. `/home?view=cloud` opens on a given view.
 
-**Map view:** the **+** / **−** buttons on the right zoom in and out, you can drag the map to look around, and **⤢** goes back to all of London. The map starts from the full view each time it comes round. Zooming or dragging restarts the view's timer.
+The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks the same on any TV or projector. Only the view on screen renders; the others sleep.
 
-**Connections view:** click a face to see that person's profile in the side panel. Click a line (or any vibe in the panel) to pull everyone who shares that vibe into a labelled group. Each click restarts the view's timer, so it stays on screen while people explore.
+**The Map:** tap an animal to see its card, or drag to turn London. Either restarts the view's timer.
+
+**The Cloud:** tap a cloud to put it in the spotlight. The sky rearranges itself every 20 seconds (Drift → By vibe → By voice) until someone presses a button.
 
 ## Privacy
 
-- **Location:** guests are placed at the **district** level only, e.g. `E8` (Hackney), with a small fixed offset so people don't stack. A full postcode is accepted but never shown. The public API (`/api/guests`) omits it; only the admin page sees what was typed.
-- **About text:** shown on the guest's profile on the display.
+- **Location:** guests are placed at the **district** level only, e.g. `E8` (Hackney), with a small fixed offset so people don't stack. A full postcode is accepted but never shown. The public API (`/api/guests`) returns only the district; only the admin page sees what was typed.
+- **Secrets are anonymous.** The display and the public API (`/api/secrets`) never include who sent a secret. The server stores the author only so the host can moderate from `/hax0r`. The Cloud shows no names at all; the Map shows a secret on the card of the person it is *about*.
+- **Phones:** joining returns a random token that the phone keeps in `localStorage`; it's how the phone posts secrets and sets its wish. Resetting the event logs every phone out.
 - **Rendering:** all guest text is rendered as text, never HTML.
 
 ## Offline / internet
 
-- **Works without internet:** pages, D3, Leaflet, fonts, postcode lookup (a bundled table of ~360 districts inside the M25) and the London borough outlines all ship with the app.
-- **Needs internet:** only the terrain tiles behind the map view (Esri World Shaded Relief, loaded by the display's browser). Without them, the map still shows London's borough outlines and names. To use a different tile server, change `TILE_URL` in `public/js/views/map.js`.
+Everything works without internet: pages, three.js, fonts (Unbounded, Figtree, Instrument Serif and Caveat, all OFL), the postcode lookup (a bundled table of ~360 districts inside the M25) and the 3D London geometry all ship with the app.
+
+The display uses WebGL, so run it on a laptop with a reasonable GPU; any recent Mac is fine.
 
 ## Development
 
@@ -66,27 +90,28 @@ npm run dev     # restart on file changes
 npm test        # unit + API tests (node:test)
 ```
 
-No build step: Node ≥ 22.13 (uses the built-in `node:sqlite`), Express 5, and vanilla ES modules in the browser.
+No build step: Node ≥ 22.13 (uses the built-in `node:sqlite`), Express 5, three.js r149, and vanilla ES modules in the browser.
 
 ```
-server.js              routes, REST API, SSE, startup banner
+server.js              routes, REST API (guests, secrets, wishes), SSE, startup banner
 src/db.js              SQLite schema/migrations, validation, CRUD, settings
 src/postcode.js        postcode → district centroid (+ jitter)
 src/network.js         LAN IP detection
 src/auth.js            optional Basic auth for admin
 src/env.js             loads .env
 pages/                 home / hi / hax0r HTML
-public/js/avatar.js    spirit-animal SVG composer (shared by browser + server validation)
-public/js/views/       graph (D3 force), map (Leaflet), needs (comic bubbles)
-public/js/guest-form.js  form used by /hi and the admin edit dialog
-data/                  bundled outcode centroids + borough boundaries
-scripts/build-data.mjs regenerates data/ (postcodes.io + ONS, both OGL)
-scripts/seed.mjs       sample guests
+public/js/animals.js   the 22 spirit animals + pin colours (shared by browser + server validation)
+public/js/weather.js   secret → weather classifier, clusters, forecast (shared by browser + server)
+public/js/3d/          three.js engines: ww-map (paper London), ww-zoo (city life + 2D stickers),
+                       ww-zoo3d (3D animals), ww-cloud (3D clouds)
+public/js/views/       map3d, cloud3d, wishes
+public/data/           london-3d.json: simplified boroughs + Thames in km (npm run build:3d)
 ```
 
 ### Data sources
 
 - **Postcode district centroids:** [postcodes.io](https://postcodes.io). Contains OS data © Crown copyright and database right, Royal Mail data © Royal Mail copyright and database right, and ONS data © Crown copyright (OGL v3).
 - **Borough boundaries:** ONS Open Geography Portal, Local Authority Districts (May 2024) BGC (OGL v3).
-- **Map tiles:** shaded relief © Esri.
-- **Fonts:** Bangers and Comic Neue (SIL Open Font License).
+- **3D London:** borough outlines simplified from the boundaries above; the Thames is a hand-traced centre line.
+- **Fonts:** Unbounded, Figtree, Instrument Serif and Caveat (SIL Open Font License, via Fontsource). See `public/fonts/OFL.txt`.
+- **3D:** [three.js](https://threejs.org) (MIT).
