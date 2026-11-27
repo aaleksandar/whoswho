@@ -353,8 +353,8 @@ function showSent({ mode, text, forName }) {
         ? (forName ? `Nobody will know it came from you. On the map it’s tied to ${forName}.` : 'Nobody will know it came from you. On the map it floats with your animal.')
         : 'Watch the screen. If someone can help, they’ll come and find you.'),
     ),
-    h('button.go', { type: 'button', onclick: () => { draft.mode = mode; showDrop(); } }, secret ? 'Drop another secret' : 'Send another lantern'),
-    h('button.ghost', { type: 'button', onclick: () => { draft.mode = secret ? 'wish' : 'secret'; showDrop(); } }, secret ? 'Send up a lantern' : 'Drop a secret instead'),
+    // One way back: the drop screen has the secret / wish switch.
+    h('button.go', { type: 'button', onclick: () => { draft.mode = mode; showDrop(); } }, 'Drop another'),
     weave ? h('button.ghost', { type: 'button', onclick: retell }, 'Weave this into my story') : null,
   );
 }
