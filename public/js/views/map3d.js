@@ -13,6 +13,21 @@ const HOLD_MS = 15000; // after someone taps an animal (or a new guest lands)
 const READ_MS = 14000; // time on a guest who said something: long enough to read it
 const WIDE_EVERY = 6; // a wide shot of London between every few guests
 const MAX_FACTS = 3;
+const WEATHER_MS = 50000; // each spell of weather
+// The room's mood sets the weather, the same way it does in the Cloud.
+const BY_VIBE = { wander: 'sunny', foodie: 'sunny', nature: 'breezy', rainy: 'rain', happy: 'snow', creative: 'rainbow', mist: 'fog', storm: 'thunder' };
+const WEATHER = {
+  sunny: ['Sunny spells', 'rgba(255, 196, 110, 0.1)'],
+  breezy: ['A fresh breeze', 'rgba(190, 225, 170, 0.06)'],
+  rain: ['Light drizzle', 'rgba(80, 100, 135, 0.2)'],
+  snow: ['Snow', 'rgba(235, 242, 252, 0.22)'],
+  rainbow: ['Rainbows', 'rgba(255, 200, 225, 0.07)'],
+  fog: ['Pea-souper fog', 'rgba(244, 243, 238, 0.32)'],
+  thunder: ['Thunderstorms', 'rgba(45, 45, 85, 0.3)'],
+};
+const DEFAULT_SKY = ['sunny', 'breezy', 'rain', 'rainbow', 'snow', 'fog', 'thunder'];
+// /home?weather=snow holds one kind of weather (handy for trying them out)
+const PINNED = new URLSearchParams(location.search).get('weather');
 
 export function createMapView(root, { geo, onInteract }) {
   const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': 'Paper pop-up model of London with landmarks, parks and traffic, and a hopping spirit animal for each guest' });
@@ -29,10 +44,13 @@ export function createMapView(root, { geo, onInteract }) {
   const titleEl = h('h1', "Who's here?");
   const guestStat = h('b', '0');
   const factStat = h('b', '0');
+  const tint = h('div.mz-tint', { 'aria-hidden': 'true' });
+  const flashEl = h('div.mz-flash', { 'aria-hidden': 'true' });
+  const wxEl = h('p.mz-wx', { 'aria-live': 'polite' });
   root.append(
-    canvas, pinsEl, leadSvg, card,
+    canvas, tint, pinsEl, leadSvg, card, flashEl,
     h('header.mz-top',
-      h('div.paper-plate', titleEl, h('p', 'the zoo has come to London')),
+      h('div.paper-plate', titleEl, h('p', 'the zoo has come to London'), wxEl),
       h('div.mz-stats',
         h('div.paper-stat', guestStat, h('span', 'animals in town')),
         h('div.paper-stat', factStat, h('span', 'fun things said'))),
@@ -48,6 +66,10 @@ export function createMapView(root, { geo, onInteract }) {
   let tourAt = 0;
   let tour = null;
   let focusedAt = 0;
+  let life = null;
+  let weatherAt = 0;
+  let weatherTimer = null;
+  let lastKind = null;
   let map = null;
   let visible = false;
 
@@ -57,6 +79,34 @@ export function createMapView(root, { geo, onInteract }) {
     focus = i;
     focusedAt = Date.now();
     renderCard();
+  }
+
+  function onFlash() {
+    flashEl.classList.remove('on');
+    void flashEl.offsetWidth;
+    flashEl.classList.add('on');
+  }
+
+  // Weather on a long loop, led by what the room has been saying: the most
+  // common moods come round first, with the rest of the sky for variety.
+  function nextWeather() {
+    const counts = {};
+    for (const s of secrets) { const k = BY_VIBE[s.vibe] || 'fog'; counts[k] = (counts[k] || 0) + 1; }
+    const ranked = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    const order = [...ranked, ...DEFAULT_SKY.filter((k) => !ranked.includes(k))];
+    const kind = WEATHER[PINNED] ? PINNED : order[(order.indexOf(lastKind) + 1) % order.length];
+    setWeather(kind, counts[kind] || 0);
+  }
+
+  function setWeather(kind, n) {
+    lastKind = kind;
+    weatherAt = Date.now();
+    life?.setWeather(kind);
+    const [label, color] = WEATHER[kind];
+    tint.style.backgroundColor = color;
+    wxEl.textContent = n
+      ? `${label} over London, brought on by ${n} fun ${n === 1 ? 'thing' : 'things'} said tonight`
+      : `${label} over London`;
   }
 
   function boot() {
@@ -80,7 +130,11 @@ export function createMapView(root, { geo, onInteract }) {
       cam: { wide: { r: 23, phi: 0.82, tx: 1.0, tz: -0.8 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
       labelScale: 24,
       marker: (ctx, g, i, at, delay) => Z3.marker(ctx, g, i, at, g.c1, { delay }),
-      extras: (ctx) => Z.city(ctx, { traffic: () => true, clouds: () => true }),
+      extras: (ctx) => {
+        const city = Z.city(ctx, { traffic: () => true, clouds: () => true });
+        life = window.WWLife ? window.WWLife.create(ctx, { onFlash }) : null;
+        return { update: (t, dt, f) => { city.update?.(t, dt, f); life?.update(t, dt, f); } };
+      },
       getFocus: () => focus,
       onPick: (i) => { touched = Date.now(); setFocus(i); onInteract?.(); },
       onTouch: () => { touched = Date.now(); onInteract?.(); },
@@ -170,12 +224,16 @@ export function createMapView(root, { geo, onInteract }) {
       visible = true;
       boot();
       map?.resume();
+      if (!lastKind || Date.now() - weatherAt > WEATHER_MS) nextWeather();
+      clearInterval(weatherTimer);
+      weatherTimer = setInterval(nextWeather, WEATHER_MS);
       clearInterval(tour);
       tour = setInterval(step, TOUR_MS);
     },
 
     hide() {
       visible = false;
+      clearInterval(weatherTimer);
       clearInterval(tour);
       map?.pause();
     },

@@ -150,7 +150,7 @@
     var loop = function (now) {
       if (!running) return;
       raf = requestAnimationFrame(loop);
-      var dt = Math.min(0.05, (now - last) / 1000); last = now; var t = now / 1000;
+      var dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; var t = now / 1000;
       th += ((Math.sin(t * 0.07) * 0.12 + drag) - th) * Math.min(1, dt * 2);
       cam.position.set(Math.sin(th) * 26, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * 26 - 2); cam.lookAt(look);
       // the focus spot sits halfway to the camera, a little above the line of sight

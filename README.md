@@ -3,7 +3,7 @@
 A guest board for parties and meetups, hosted on your laptop and reachable from every device on the local network.
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
-  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves.
+  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves. The animals have a life of their own: they dance, nap, flip and do laps of their spot on a long loop, hop over to visit their neighbours (hearts, notes and stars), and every couple of minutes a stadium wave rolls across London. The weather changes every 50 seconds (sunshine, breeze, drizzle, snow, rainbows, fog, thunderstorms), led by the moods of what the room has said, the same way the Cloud picks its weather. In a thunderstorm the animals jump at every flash.
   - **The Cloud:** every fun thing guests say is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, One at a time, a cloud floats to the front and its words show big enough to read across the room.
   - **Wishes:** "what do you need in life right now?" Every wish rises as its own lantern over the night skyline, with the guest's name, so people who can help go and say hi. Guests can send as many as they like, and the lanterns keep rising on a loop.
 - **`/hi`** is for phones. Join with a name, a postcode and a spirit animal (66 to pick from), then **say something fun about you** and send **wishes**, as many as you like.
@@ -81,7 +81,7 @@ Settings come from environment variables, or from a `.env` file in the project f
 
 Set the event title, the seconds each view stays on screen, and which views are in rotation from `/hax0r`. Changes apply to the display live.
 
-**Display controls:** click a view's tab (The Map · The Cloud · Wishes) to jump to it; the timer restarts and auto-rotation carries on. Keys: `←` `→` switch view · `Space` pause (also stops the jumps to new arrivals) · `F` fullscreen. The cursor hides after 3 s. `/home?view=cloud` opens on a given view.
+**Display controls:** click a view's tab (The Map · The Cloud · Wishes) to jump to it; the timer restarts and auto-rotation carries on. Keys: `←` `→` switch view · `Space` pause (also stops the jumps to new arrivals) · `F` fullscreen. The cursor hides after 3 s. `/home?view=cloud` opens on a given view. `/home?weather=snow` holds the Map on one kind of weather (`sunny`, `breezy`, `rain`, `snow`, `rainbow`, `fog`, `thunder`).
 
 The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks the same on any TV or projector. Only the view on screen renders; the others sleep.
 
@@ -122,7 +122,7 @@ pages/                 home / hi / hax0r HTML
 public/js/animals.js   the 22 spirit animals + pin colours (shared by browser + server validation)
 public/js/weather.js   fun thing → weather classifier, clusters, forecast (shared by browser + server)
 public/js/3d/          three.js engines: ww-map (paper London), ww-zoo (city life + 2D stickers),
-                       ww-zoo3d (3D animals), ww-cloud (3D clouds)
+                       ww-zoo3d (3D animals), ww-life (visits, waves, weather), ww-cloud (3D clouds)
 public/js/views/       map3d, cloud3d, wishes
 public/data/           london-3d.json: simplified boroughs + Thames in km (npm run build:3d)
 ```

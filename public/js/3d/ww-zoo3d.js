@@ -493,6 +493,12 @@
   };
 
   // A character marker for WWMap: stands on a glossy token, hops slowly, faces the camera, blinks.
+  // A guest's animal on the map. Besides hopping, it can walk somewhere
+  // (goTo / goHome), face something (face), and act: dance, rock, nap, flip,
+  // look, zoom, greet, startle, wave. Left alone it picks its own acts on a
+  // long, unsynchronised loop; WWLife's director sends it visiting.
+  var ACTS = { dance: 3.2, rock: 3, nap: 8, flip: 1.4, look: 3, zoom: 3.6 };
+  var IDLE = ['dance', 'rock', 'nap', 'flip', 'look', 'zoom', 'rock', 'look'];
   Z3.marker = function (ctx, g, i, at, color, opts) {
     opts = opts || {};
     var T = ctx.T;
@@ -505,37 +511,106 @@
     var hold = new T.Group(); hold.add(a.root); grp.add(hold);
     var puffM = new T.MeshBasicMaterial({ color: 0xFFFDF8, transparent: true, opacity: 0, depthWrite: false });
     var puffs = []; for (var k = 0; k < 7; k++) { var p = new T.Mesh(new T.SphereGeometry(0.09, 10, 8), puffM); p.visible = false; grp.add(p); puffs.push({ m: p, a: k / 7 * Math.PI * 2 }); }
-    var base = opts.scale || 1.25, S = base, h = 0, drop = 0, yaw = null, spin = 0, wasAir = false, puffT = 9, blinkAt = 2 + (i % 7) * 0.7, earAt = 3 + (i % 5);
+    var base = opts.scale || 1.25, S = base, h = 0, drop = 0, yaw = null, spin = 0, wasAir = false, puffT = 9;
     var ph = (i * 0.61) % 3.4, born = performance.now() / 1000 + (opts.delay == null ? 0.2 + i * 0.05 : opts.delay), tmp = new T.Vector3();
-    return {
-      i: i, pick: [a.root, tok],
+    var seed = (g.key || String(i)).split('').reduce(function (n, c) { return (n * 31 + c.charCodeAt(0)) >>> 0; }, 7);
+    var rnd = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    var off = new T.Vector3(), goal = null, onArrive = null, faceAt = null, gy = 0, act = null, nextAct = null, zAt = 0, travel = 0;
+    var walking = false;
+    var self = {
+      i: i, pick: [a.root, tok], home: new T.Vector3(at.x, at.y, at.z),
       remove: function () { ctx.scene.remove(grp); },
+      /** Where the animal is now, on the ground (world coordinates). */
+      pos: function (v) { return v.set(at.x + off.x, at.y + gy, at.z + off.z); },
+      idle: function () { return !goal && !act && off.lengthSq() < 0.01; },
+      away: function () { return !!goal || off.lengthSq() > 0.01; },
+      goTo: function (world, cb) { goal = new T.Vector3(world.x - at.x, 0, world.z - at.z); onArrive = cb || null; act = null; faceAt = null; },
+      goHome: function (cb) { goal = new T.Vector3(0, 0, 0); onArrive = cb || null; faceAt = null; },
+      face: function (world) { faceAt = world ? world.clone() : null; },
+      act: function (name, dur, t0) { act = { name: name, t0: t0 == null ? performance.now() / 1000 : t0, dur: dur || ACTS[name] || 2 }; },
       update: function (t, dt, isF) {
         S += ((isF ? base * 1.35 : base) - S) * Math.min(1, dt * 4);
-        var per = isF ? 1.7 : 3.4, u = ((t + ph) % per) / per, air = isF ? 0.55 : 0.36, sy = 1, sx = 1;
-        h = 0; drop = 0;
-        if (u < air) { var kk = u / air, s = Math.sin(Math.PI * kk); h = s * (isF ? 1.5 : 0.8); sy = 1 + 0.12 * s; sx = 1 - 0.05 * s; }
-        else { var k2 = (u - air) / (1 - air); if (k2 < 0.14) { var q = Math.sin(Math.PI * k2 / 0.14); sy = 1 - 0.2 * q; sx = 1 + 0.12 * q; } }
-        var inAir = u < air; if (wasAir && !inAir) puffT = 0; wasAir = inAir;
         var life = performance.now() / 1000 - born;
+        if (nextAct === null) nextAct = t + 4 + rnd() * 16;
+        if (isF && act && act.name !== 'wave') act = null;
+        // left alone: pick something to do, now and then
+        if (!isF && !act && !goal && t > nextAct && life > 3) {
+          var nm = IDLE[Math.floor(rnd() * IDLE.length)];
+          self.act(nm, ACTS[nm], t);
+          if (nm === 'zoom') travel = 0;
+          nextAct = t + ACTS[nm] + 10 + rnd() * 22;
+        }
+        var A = act && t >= act.t0 ? act : null, ak = A ? (t - A.t0) / A.dur : 0;
+        if (A && ak >= 1) { if (A.name === 'zoom') goal = new T.Vector3(0, 0, 0); act = null; A = null; }
+
+        // walking
+        walking = false;
+        var dir = null;
+        if (A && A.name === 'zoom') {
+          var za = ak * Math.PI * 4, zr = 0.95 * Math.sin(Math.min(1, ak * 4) * Math.PI / 2);
+          var nx = Math.sin(za) * zr, nz = Math.cos(za) * zr;
+          dir = Math.atan2(nx - off.x, nz - off.z); off.set(nx, 0, nz); walking = true;
+        } else if (goal) {
+          tmp.copy(goal).sub(off); tmp.y = 0;
+          var dist = tmp.length();
+          if (dist < 0.04) { off.copy(goal); goal = null; var cb = onArrive; onArrive = null; if (cb) cb(); }
+          else { tmp.multiplyScalar(Math.min(dist, 1.9 * dt) / dist); off.add(tmp); dir = Math.atan2(tmp.x, tmp.z); walking = true; }
+        }
+        // follow the paper ground (boroughs have different heights; keep home height over the river)
+        var wy = off.lengthSq() > 0.0001 ? ctx.topAt(at.x + off.x, -(at.z + off.z)) : at.y;
+        if (wy < 0) wy = at.y;
+        gy += (wy - at.y - gy) * Math.min(1, dt * 8);
+
+        // the hop
+        var per = isF ? 1.7 : walking ? 0.55 : A && A.name === 'greet' ? 0.5 : A && A.name === 'dance' ? 0.45 : 3.4;
+        var amp = isF ? 1.5 : walking ? 0.42 : A && (A.name === 'greet' || A.name === 'dance') ? 0.55 : 0.8;
+        var air = isF ? 0.55 : walking ? 0.6 : 0.36;
+        var u = ((t + ph) % per) / per, sy = 1, sx = 1, still = A && (A.name === 'nap' || A.name === 'rock' || A.name === 'look' || A.name === 'flip' || A.name === 'startle' || A.name === 'wave');
+        h = 0; drop = 0;
+        if (!still) {
+          if (u < air) { var kk = u / air, s = Math.sin(Math.PI * kk); h = s * amp; sy = 1 + 0.12 * s; sx = 1 - 0.05 * s; }
+          else { var k2 = (u - air) / (1 - air); if (k2 < 0.14) { var q = Math.sin(Math.PI * k2 / 0.14); sy = 1 - 0.2 * q; sx = 1 + 0.12 * q; } }
+        }
+        var inAir = !still && u < air;
+        var roll = 0, pitch = 0, look = 0;
+        if (A) {
+          if (A.name === 'nap') { sy = 0.82 + Math.sin(t * 2.2) * 0.03; sx = 1.08; pitch = 0.12; if (t > zAt) { zAt = t + 1.1; if (ctx.fx) ctx.fx('z', self.anchor(new T.Vector3())); } }
+          else if (A.name === 'rock') roll = Math.sin(ak * Math.PI * 6) * 0.32;
+          else if (A.name === 'look') look = Math.sin(ak * Math.PI * 2) * 1.3;
+          else if (A.name === 'flip' || A.name === 'startle' || A.name === 'wave') {
+            var hs = Math.sin(Math.PI * Math.min(1, ak)); h = hs * (A.name === 'flip' ? 2.2 : A.name === 'wave' ? 1.3 : 1.5); sy = 1 + 0.1 * hs;
+            if (A.name === 'flip') pitch = -ak * Math.PI * 2;
+            inAir = ak < 1;
+          }
+        }
+        if (wasAir && !inAir) puffT = 0; wasAir = inAir;
         if (life < 1.2) { var e = Math.max(0, life) / 1.2, dropH = Math.pow(1 - Math.min(1, e * 1.6), 2) * 14; drop = dropH; h += dropH + (e > 0.62 ? Math.abs(Math.sin((e - 0.62) / 0.38 * Math.PI)) * 0.6 * (1 - e) : 0); }
         hold.visible = life > 0; // outside the drop-in: a long first frame (shader compile) can skip it entirely
-        hold.position.y = 0.1 + h; hold.scale.set(sx * S, sy * S, sx * S);
-        tmp.copy(ctx.cam.position).sub(grp.position);
-        var want = Math.atan2(tmp.x, tmp.z) + Math.sin(t * 0.9 + i) * 0.25;
-        if (yaw === null) yaw = want; var d = want - yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; yaw += d * Math.min(1, dt * 3);
-        if (isF && inAir) spin = (u / air) * Math.PI * 2; else spin *= 0.85;
-        hold.rotation.y = yaw + spin;
-        a.head.rotation.z = Math.sin(t * 1.3 + i) * 0.08; a.head.rotation.x = -0.12 + Math.sin(t * 0.8 + i * 2) * 0.05;
-        var bt = (t + i * 0.37) % 4.2, bl = bt < 0.14 ? 0.12 : 1; a.eyes.forEach(function (e) { e.scale.y = bl; });
-        var et = (t + i * 0.53) % 5, wig = et < 0.5 ? Math.sin(et / 0.5 * Math.PI * 4) * 0.25 : 0; a.ears.forEach(function (e, n) { e.rotation.x = (e.userData.rx0 == null ? (e.userData.rx0 = e.rotation.x) : e.userData.rx0) + wig * (n % 2 ? 1 : -1); });
-        if (a.tail) a.tail.rotation.y = Math.sin(t * 6 + i) * 0.4;
+        hold.position.set(off.x, 0.1 + gy + h, off.z); hold.scale.set(sx * S, sy * S, sx * S);
+
+        // which way to face: where it's going, who it's greeting, or the camera
+        var want;
+        if (dir != null) want = dir;
+        else if (faceAt) want = Math.atan2(faceAt.x - (at.x + off.x), faceAt.z - (at.z + off.z));
+        else { tmp.copy(ctx.cam.position).sub(grp.position); want = Math.atan2(tmp.x, tmp.z) + Math.sin(t * 0.9 + i) * 0.25; }
+        want += look;
+        if (yaw === null) yaw = want; var d = want - yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; yaw += d * Math.min(1, dt * (walking ? 8 : 3));
+        if (isF && inAir) spin = (u / air) * Math.PI * 2;
+        else if (A && A.name === 'dance') spin = ak * Math.PI * 6;
+        else spin *= 0.85;
+        hold.rotation.set(pitch, yaw + spin, roll, 'YXZ');
+        a.head.rotation.z = Math.sin(t * 1.3 + i) * 0.08; a.head.rotation.x = -0.12 + Math.sin(t * 0.8 + i * 2) * 0.05 + (A && A.name === 'nap' ? 0.35 : 0);
+        var bt = (t + i * 0.37) % 4.2, bl = A && A.name === 'nap' ? 0.12 : bt < 0.14 ? 0.12 : 1; a.eyes.forEach(function (e) { e.scale.y = bl; });
+        var et = (t + i * 0.53) % 5, wig = et < 0.5 || (A && A.name === 'greet') ? Math.sin(t * 25) * 0.25 : 0; a.ears.forEach(function (e, n) { e.rotation.x = (e.userData.rx0 == null ? (e.userData.rx0 = e.rotation.x) : e.userData.rx0) + wig * (n % 2 ? 1 : -1); });
+        if (a.tail) a.tail.rotation.y = Math.sin(t * (A && (A.name === 'greet' || A.name === 'dance') ? 14 : 6) + i) * 0.4;
         puffT += dt; var pl = Math.min(1, puffT / 0.5);
-        puffs.forEach(function (p) { p.m.visible = pl < 1; if (pl < 1) { var r = 0.4 + pl * 0.6 * S; p.m.position.set(Math.cos(p.a) * r, 0.1 + pl * 0.15, Math.sin(p.a) * r); p.m.scale.setScalar((0.6 + pl) * S * 0.8); } });
+        puffs.forEach(function (p) { p.m.visible = pl < 1; if (pl < 1) { var r = 0.4 + pl * 0.6 * S; p.m.position.set(off.x + Math.cos(p.a) * r, gy + 0.1 + pl * 0.15, off.z + Math.sin(p.a) * r); p.m.scale.setScalar((0.6 + pl) * S * 0.8); } });
         puffM.opacity = pl < 1 ? 0.85 * (1 - pl) : 0;
         var pu = (t * 0.5 + i * 0.13) % 1; ring.scale.setScalar(S * (0.9 + pu * 0.8)); ring.material.opacity = 0.9 * (1 - pu);
       },
-      anchor: function (v) { return v.set(at.x, at.y + 0.1 + (h - drop) + 1.85 * S, at.z); } // camera/labels ignore the drop-in
+      // camera/labels follow the animal but ignore the drop-in
+      anchor: function (v) { return v.set(at.x + off.x, at.y + gy + 0.1 + (h - drop) + 1.85 * S, at.z + off.z); },
     };
+    return self;
   };
 })();

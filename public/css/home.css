@@ -210,6 +210,13 @@ body.home.idle * { cursor: none !important; }
   transform: rotate(-4deg);
 }
 .mz-pin small { font: 700 13px var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--brown); }
+.mz-tint { position: absolute; inset: 0; z-index: 1; pointer-events: none; background-color: transparent; transition: background-color 4s ease; }
+.mz-flash { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: #F4F1FF; opacity: 0; }
+.mz-flash.on { animation: mz-flash 0.9s ease-out; }
+@keyframes mz-flash { 0% { opacity: 0.55; } 12% { opacity: 0.05; } 22% { opacity: 0.4; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mz-flash.on { animation: none; } }
+.paper-plate .mz-wx { margin: 10px 0 0; font: 700 16px var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--brown); }
+.paper-plate .mz-wx:empty { display: none; }
 .mz-lead { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .mz-card {
   position: absolute;

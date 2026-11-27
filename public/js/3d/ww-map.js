@@ -12,7 +12,7 @@
     var scene = new T.Scene();
     if (th.fog != null) scene.fog = new T.Fog(th.fog, th.fogNear || 80, th.fogFar || 220);
     var cam = new T.PerspectiveCamera(o.fov || 30, 1920 / 1080, 0.5, 600);
-    scene.add(new T.HemisphereLight(th.hemi[0], th.hemi[1], th.hemi[2]));
+    var hemi = new T.HemisphereLight(th.hemi[0], th.hemi[1], th.hemi[2]); scene.add(hemi);
     var sun = new T.DirectionalLight(th.sun[0], th.sun[1]);
     sun.position.set(-26, 50, 26);
     sun.castShadow = th.shadows !== false;
@@ -81,7 +81,7 @@
     var river = new T.Mesh(rg, riverMat); river.receiveShadow = true; scene.add(river);
     var nearRiver = function (x, z, pad) { for (var s = 0; s < samples.length; s++) { var q = samples[s], dx = q[0] - x, dz = q[1] - z; if (dx * dx + dz * dz < (q[2] + pad) * (q[2] + pad)) return true; } return false; };
 
-    var ctx = { T: T, scene: scene, TOP: TOP, maxTop: maxTop, topAt: topAt, rnd: rnd, cam: cam, nearRiver: nearRiver, curve: curve, renderer: r };
+    var ctx = { T: T, scene: scene, TOP: TOP, maxTop: maxTop, topAt: topAt, rnd: rnd, cam: cam, nearRiver: nearRiver, curve: curve, renderer: r, sun: sun, hemi: hemi, target: new T.Vector3() };
 
     if (th.buildings) {
       var B = th.buildings, box = new T.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
@@ -127,6 +127,7 @@
 
     // Markers are keyed by guest.key, so live updates only add/remove what changed.
     var markers = [], byKey = {}, pick = [], booted = false;
+    ctx.markers = function () { return markers; };
     var setGuests = function (list) {
       var next = [], keep = {};
       list.forEach(function (g, i) {
@@ -171,7 +172,7 @@
     var loop = function (now) {
       if (!running) return;
       raf = requestAnimationFrame(loop);
-      var dt = Math.min(0.05, (now - last) / 1000); last = now;
+      var dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; // rAF time can trail performance.now() right after resume
       var t = now / 1000, f = o.getFocus();
       markers.forEach(function (m, i) { m.update(t, dt, f === i, f >= 0); });
       if (extra && extra.update) extra.update(t, dt, f);
@@ -184,7 +185,7 @@
       var k = 1 - Math.exp(-dt * 1.6);
       Object.keys(want).forEach(function (key) { cv[key] += (want[key] - cv[key]) * k; });
       cam.position.set(cv.tx + cv.r * Math.sin(cv.phi) * Math.sin(cv.th), cv.ty + cv.r * Math.cos(cv.phi), cv.tz + cv.r * Math.sin(cv.phi) * Math.cos(cv.th));
-      cam.lookAt(cv.tx, cv.ty, cv.tz);
+      cam.lookAt(cv.tx, cv.ty, cv.tz); ctx.target.set(cv.tx, cv.ty, cv.tz);
       r.render(scene, cam);
       var els = o.pins ? o.pins() : [];
       markers.forEach(function (m, i) {
