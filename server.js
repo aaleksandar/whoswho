@@ -1,18 +1,17 @@
 // whoswho — local-network guest board.
-//   /home   rotating display (graph · map · needs) with a QR code to /hi
-//   /hi     guest registration
+//   /home   rotating display (3D map · the cloud · wishes) with a QR code to /hi
+//   /hi     join, then drop secrets and wishes from your phone
 //   /hax0r  admin
 
 import express from 'express';
 import QRCode from 'qrcode';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { openDb, publicGuest, ValidationError } from './src/db.js';
+import { openDb, publicGuest, ValidationError, AuthError } from './src/db.js';
 import { lanHost } from './src/network.js';
 import { adminAuth } from './src/auth.js';
 import { parsePostcode, lookupOutcode } from './src/postcode.js';
 import { loadEnvFile } from './src/env.js';
-import { VIBE_SUGGESTIONS } from './public/js/vibes.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const page = (name) => path.join(ROOT, 'pages', `${name}.html`);
@@ -67,11 +66,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.get('/hax0r', admin, (_req, res) => res.sendFile(page('hax0r')));
 
   app.use(express.static(path.join(ROOT, 'public'), { index: false }));
-  app.use('/vendor/d3', express.static(path.join(ROOT, 'node_modules/d3/dist')));
-  app.use('/vendor/leaflet', express.static(path.join(ROOT, 'node_modules/leaflet/dist')));
-  app.get('/data/london-boroughs.geojson', (_req, res) =>
-    res.type('application/geo+json').sendFile(path.join(ROOT, 'data/london-boroughs.geojson')),
-  );
+  app.get('/vendor/three.min.js', (_req, res) => res.sendFile(path.join(ROOT, 'node_modules/three/build/three.min.js')));
 
   // ------------------------------------------------------------- public API
   const parseId = (req) => {
@@ -82,22 +77,37 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.get('/api/guests', (_req, res) => res.json(db.listGuests().map(publicGuest)));
 
   app.post('/api/guests', (req, res) => {
-    const guest = db.createGuest(req.body);
+    const { guest, token } = db.createGuest(req.body);
     broadcast('guests', { type: 'created', guest: publicGuest(guest) });
-    res.status(201).json(publicGuest(guest));
+    res.status(201).json({ guest: publicGuest(guest), token });
+  });
+
+  // The phone's own identity: a token handed out once, on join.
+  const tokenOf = (req) => req.get('x-guest-token') || '';
+
+  app.get('/api/me', (req, res) => {
+    const me = db.guestByToken(tokenOf(req));
+    if (!me) return res.status(401).json({ error: 'Unknown phone, join first' });
+    res.json(publicGuest(me));
+  });
+
+  app.put('/api/me', (req, res) => {
+    const me = db.setWish(tokenOf(req), req.body?.need);
+    broadcast('guests', { type: 'updated', guest: publicGuest(me), wish: true });
+    res.json(publicGuest(me));
+  });
+
+  // Secrets are anonymous: the author is stored (so moderation can trace
+  // abuse from /hax0r) but never sent to the display or the public API.
+  app.get('/api/secrets', (_req, res) => res.json(db.listSecrets()));
+
+  app.post('/api/secrets', (req, res) => {
+    const secret = db.createSecret(tokenOf(req), req.body);
+    broadcast('secrets', { type: 'created', secret });
+    res.status(201).json(secret);
   });
 
   app.get('/api/settings', (_req, res) => res.json(db.getSettings()));
-
-  // Suggestions for /hi: vibes guests already use (most popular first, so new
-  // guests overlap with people here), then the curated list.
-  app.get('/api/vibes', (_req, res) => {
-    const counts = new Map();
-    for (const g of db.listGuests()) for (const v of g.vibes) counts.set(v, (counts.get(v) || 0) + 1);
-    const used = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const rest = VIBE_SUGGESTIONS.filter((v) => !counts.has(v)).map((v) => [v, 0]);
-    res.json([...used, ...rest].map(([vibe, count]) => ({ vibe, count })));
-  });
 
   app.get('/api/postcode/:pc', (req, res) => {
     const parsed = parsePostcode(req.params.pc);
@@ -135,6 +145,16 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
     const id = parseId(req);
     if (!id || !db.deleteGuest(id)) return res.status(404).json({ error: 'Guest not found' });
     broadcast('guests', { type: 'deleted', id });
+    broadcast('secrets', { type: 'reset' }); // secrets about them went too
+    res.status(204).end();
+  });
+
+  app.get('/api/admin/secrets', admin, (_req, res) => res.json(db.listSecretsAdmin()));
+
+  app.delete('/api/admin/secrets/:id', admin, (req, res) => {
+    const id = parseId(req);
+    if (!id || !db.deleteSecret(id)) return res.status(404).json({ error: 'Secret not found' });
+    broadcast('secrets', { type: 'deleted', id });
     res.status(204).end();
   });
 
@@ -144,6 +164,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
     }
     const deleted = db.deleteAllGuests();
     broadcast('guests', { type: 'reset' });
+    broadcast('secrets', { type: 'reset' });
     res.json({ deleted });
   });
 
@@ -157,6 +178,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((err, _req, res, _next) => {
     if (err instanceof ValidationError) return res.status(400).json({ error: err.message, field: err.field });
+    if (err instanceof AuthError) return res.status(401).json({ error: err.message });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON' });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request too large' });
     console.error(err);
