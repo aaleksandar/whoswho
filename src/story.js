@@ -56,7 +56,10 @@ const hasCredentials = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANT
  */
 export function createStoryteller({ db, publicGuest, onStory, client, log = console }) {
   const off = /^(0|off|false|no)$/i.test(process.env.STORIES || '');
-  const api = off ? null : client || (hasCredentials() ? new Anthropic() : null);
+  // A key that isn't scoped to one workspace has to name the workspace.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID;
+  const make = () => new Anthropic(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {});
+  const api = off ? null : client || (hasCredentials() ? make() : null);
   const pending = new Set();
   const tells = new Map();
 

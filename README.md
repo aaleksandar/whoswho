@@ -87,6 +87,7 @@ Settings come from environment variables, or from a `.env` file in the project f
 | `PUBLIC_HOST`    | *(auto)*           | Overrides the auto-detected LAN IP used in the QR code (e.g. if a VPN interface gets picked) |
 | `PUBLIC_URL`     | *(auto)*           | Full public address for the QR code (e.g. a tunnel); pages opened through a tunnel detect it |
 | `ANTHROPIC_API_KEY` | *(unset)*       | Turns on the storyteller (see [Stories](#stories))                                            |
+| `ANTHROPIC_WORKSPACE_ID` | *(unset)*  | Needed with a key that isn't scoped to one workspace                                        |
 | `STORY_MODEL`    | `claude-opus-5-5`  | Claude model that tells the stories                                                          |
 | `STORIES`        | *(on)*             | `off` turns the storyteller off even with a key set                                          |
 
