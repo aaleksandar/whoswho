@@ -35,7 +35,7 @@ function renderGuests() {
   const q = $('#filter').value.trim().toLowerCase();
   const shown = [...guests]
     .reverse()
-    .filter((g) => !q || [g.name, g.need, g.life, g.story, g.postcode, g.area, g.avatar.animal].some((v) => v && v.toLowerCase().includes(q)));
+    .filter((g) => !q || [g.name, g.need, g.postcode, g.area, g.avatar.animal].some((v) => v && v.toLowerCase().includes(q)));
   const counts = new Map();
   for (const s of secrets) counts.set(s.aboutId, (counts.get(s.aboutId) || 0) + 1);
   $('#guest-count').textContent = guests.length;
@@ -45,9 +45,6 @@ function renderGuests() {
       h('tr', { dataset: { id: g.id } },
         h('td', badge(g.avatar)),
         h('td.ad-name', g.name, h('small.ad-about', `the ${animalLabel(g.avatar.animal).toLowerCase()}`)),
-        h('td.ad-story',
-          g.story ? h('span', { title: g.story }, g.story) : h('span.ad-dim', g.life ? `“${g.life}”` : '—'),
-          h('small', g.story ? 'story' : g.life ? 'their words, no story yet' : '')),
         h('td.ad-need', g.need || h('span.ad-dim', '—'), (() => {
           const n = wishes.filter((w) => w.guestId === g.id).length;
           return n > 1 ? h('small', `+${n - 1} more lantern${n > 2 ? 's' : ''}`) : null;
@@ -96,7 +93,6 @@ function edit(g) {
       try {
         await api('PUT', `/api/admin/guests/${g.id}`, {
           name: f.name.value, postcode: f.postcode.value,
-          life: f.life.value, story: f.story.value,
           avatar: { animal: f.animal.value, color: f.color.value },
         });
         dialog.close();
@@ -112,23 +108,8 @@ function edit(g) {
     h('label', 'Colour', select('color', COLORS, g.avatar.color, (c) => c))),
   h('label', 'Postcode', h('input', { type: 'text', name: 'postcode', maxlength: 10, value: g.postcode || '' })),
   wishList(g),
-  h('label', 'Life as their animal (their words)', h('textarea', { name: 'life', maxlength: 280, rows: 3 }, g.life || '')),
-  h('label', 'Story (shown on the big screen; clear it to hide)', h('textarea', { name: 'story', maxlength: 1200, rows: 7 }, g.story || '')),
   h('div.ad-form-foot',
     h('button.ad-btn.primary', { type: 'submit' }, 'Save changes'),
-    h('button.ad-btn', {
-      type: 'button',
-      title: 'Ask the storyteller for a new story from what they shared',
-      onclick: async () => {
-        try {
-          await api('POST', `/api/admin/guests/${g.id}/story`);
-          dialog.close();
-        } catch (err) {
-          status.textContent = err.message;
-          status.className = 'ad-status err';
-        }
-      },
-    }, 'Retell'),
     h('button.ad-btn', { type: 'button', onclick: () => dialog.close() }, 'Cancel'),
     status));
   $('#edit-body').replaceChildren(form);

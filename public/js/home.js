@@ -13,7 +13,7 @@ import { createWishesView } from './views/wishes.js';
 const LABELS = { map: 'The Map', cloud: 'The Cloud', wishes: 'Wishes' };
 const QR_COPY = {
   map: ['Join the zoo', 'Scan · pick your animal'],
-  cloud: ['Drop a secret', 'Scan · it stays anonymous'],
+  cloud: ['Say something fun', 'Scan · it floats into the sky'],
   wishes: ['Light your lantern', 'Scan · say what you need'],
   splash: ['Join the zoo', 'Scan · pick your animal'],
 };
@@ -160,10 +160,6 @@ async function onGuests(e) {
   if (e.type === 'created') {
     toast(sticker(g.avatar.animal, 128), h('div', h('small', 'Welcome to the zoo!'), h('b', `${g.name}, the ${animalLabel(g.avatar.animal).toLowerCase()}`)));
     if (g.lat != null && jumpTo('map')) views.map.highlight(g.id);
-  } else if (e.story && g.story && g.lat != null) {
-    // Their story just arrived: fly to them so the room can read it.
-    if (jumpTo('map') || current === 'map') views.map.highlight(g.id);
-    else toast(sticker(g.avatar.animal, 128), h('div', h('small', 'A new story on the map'), h('b', `${g.name}, the ${animalLabel(g.avatar.animal).toLowerCase()}`)));
   }
 }
 
@@ -179,10 +175,19 @@ async function onSecrets(e) {
   state = { ...state, secrets: await api('GET', '/api/secrets') };
   pushState();
   if (e?.type !== 'created') return;
-  if (jumpTo('cloud') || current === 'cloud') views.cloud.highlight(e.secret);
+  // Something fun about someone: fly to their card on the map, so the room
+  // sees who said it. (Anyone not on the map gets the Cloud's spotlight.)
+  let who = state.guests.find((g) => g.id === e.secret.aboutId);
+  if (!who) { // they may have joined a moment ago, ahead of our guest list
+    state = { ...state, guests: await api('GET', '/api/guests') };
+    pushState();
+    who = state.guests.find((g) => g.id === e.secret.aboutId);
+  }
+  if (who?.lat != null && settings.views.includes('map') && (jumpTo('map') || current === 'map')) views.map.highlight(who.id);
+  else if (jumpTo('cloud') || current === 'cloud') views.cloud.highlight(e.secret);
   else {
     const v = VIBES[e.secret.vibe] || VIBES.mist;
-    toast(h('div', h('small', 'A new secret floated into the cloud'), h('b', `${v.weather} · ${v.name}`)));
+    toast(h('div', h('small', 'Something fun just floated into the cloud'), h('b', `${v.weather} · ${v.name}`)));
   }
 }
 

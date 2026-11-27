@@ -12,16 +12,14 @@ import { lanHost } from './src/network.js';
 import { adminAuth } from './src/auth.js';
 import { parsePostcode, lookupOutcode } from './src/postcode.js';
 import { loadEnvFile } from './src/env.js';
-import { createStoryteller } from './src/story.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const page = (name) => path.join(ROOT, 'pages', `${name}.html`);
 
 /**
- * @param {{db: ReturnType<typeof openDb>, getPort: () => number, adminPassword?: string, storyClient?: object}} opts
- * `storyClient` stands in for the Anthropic client in tests.
+ * @param {{db: ReturnType<typeof openDb>, getPort: () => number, adminPassword?: string}} opts
  */
-export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSWORD, storyClient }) {
+export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSWORD }) {
   const app = express();
   const admin = adminAuth(adminPassword);
   app.disable('x-powered-by');
@@ -63,16 +61,6 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
     for (const res of clients) res.end();
     clients.clear();
   };
-
-  // Stories arrive a few seconds after joining; the display and phone update then.
-  const stories = createStoryteller({
-    db,
-    publicGuest,
-    client: storyClient,
-    onStory: (guest) => broadcast('guests', { type: 'updated', guest: publicGuest(guest), story: !!guest.story }),
-  });
-  app.locals.stories = stories;
-  const mine = (g) => ({ ...publicGuest(g), storiesOn: stories.enabled, storyPending: stories.isPending(g.id), tellsLeft: stories.tellsLeft(g.id) });
 
   app.get('/api/events', (req, res) => {
     res.set({
@@ -120,8 +108,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.post('/api/guests', (req, res) => {
     const { guest, token } = db.createGuest(req.body);
     broadcast('guests', { type: 'created', guest: publicGuest(guest) });
-    if (guest.life) stories.tell(guest.id);
-    res.status(201).json({ guest: mine(guest), token });
+    res.status(201).json({ guest: publicGuest(guest), token });
   });
 
   // The phone's own identity: a token handed out once, on join.
@@ -130,24 +117,14 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.get('/api/me', (req, res) => {
     const me = db.guestByToken(tokenOf(req));
     if (!me) return res.status(401).json({ error: 'Unknown phone, join first' });
-    res.json(mine(me));
+    res.json(publicGuest(me));
   });
 
-  // {life} rewrites "my life as an animal" (and retells).
+  // Older phones: {need} sends one more lantern.
   app.put('/api/me', (req, res) => {
-    const body = req.body ?? {};
-    let me;
-    if ('life' in body) {
-      me = db.setLife(tokenOf(req), body.life);
-      stories.tell(me.id);
-      broadcast('guests', { type: 'updated', guest: publicGuest(me) });
-    } else {
-      // older phones: {need} sends one more lantern
-      const r = db.addWish(tokenOf(req), body.need);
-      me = r.guest;
-      broadcast('wishes', { type: 'created', wish: r.wish });
-    }
-    res.json(mine(me));
+    const { guest, wish } = db.addWish(tokenOf(req), req.body?.need);
+    broadcast('wishes', { type: 'created', wish });
+    res.json(publicGuest(guest));
   });
 
   // Wishes: one lantern each, as many as you like. Names show on lanterns.
@@ -156,18 +133,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.post('/api/wishes', (req, res) => {
     const { guest, wish } = db.addWish(tokenOf(req), req.body?.text);
     broadcast('wishes', { type: 'created', wish });
-    res.status(201).json({ wish, me: mine(guest) });
-  });
-
-  // Retell my story, now with everything I've shared since (wish, secrets).
-  app.post('/api/me/story', (req, res) => {
-    const me = db.guestByToken(tokenOf(req));
-    if (!me) return res.status(401).json({ error: 'Unknown phone, join first' });
-    if (!stories.enabled) return res.status(503).json({ error: 'The storyteller is off tonight' });
-    if (!stories.isPending(me.id) && !stories.tell(me.id)) {
-      return res.status(429).json({ error: 'That’s all the retellings for tonight' });
-    }
-    res.status(202).json(mine(me));
+    res.status(201).json({ wish, me: publicGuest(guest) });
   });
 
   // Secrets are anonymous: the author is stored (so moderation can trace
@@ -205,14 +171,6 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
 
   // -------------------------------------------------------------- admin API
   app.get('/api/admin/guests', admin, (_req, res) => res.json(db.listGuests()));
-
-  app.post('/api/admin/guests/:id/story', admin, (req, res) => {
-    const id = parseId(req);
-    if (!id || !db.getGuest(id)) return res.status(404).json({ error: 'Guest not found' });
-    if (!stories.enabled) return res.status(503).json({ error: 'The storyteller is off: set ANTHROPIC_API_KEY in .env' });
-    stories.tell(id, { force: true });
-    res.status(202).json({ pending: stories.isPending(id) });
-  });
 
   app.put('/api/admin/guests/:id', admin, (req, res) => {
     const id = parseId(req);
@@ -292,9 +250,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.log(`    Display   ${b}/home`);
     console.log(`    Register  ${b}/hi`);
     console.log(`    Admin     ${b}/hax0r${process.env.ADMIN_PASSWORD ? '  (password protected)' : ''}\n`);
-    console.log(app.locals.stories.enabled
-      ? '  Storyteller on: guests get a story told by Claude.\n'
-      : '  Storyteller off: set ANTHROPIC_API_KEY in .env to turn guests\' answers into stories.\n');
     if (host === 'localhost') console.log('  ⚠ No LAN address found — set PUBLIC_HOST if other devices cannot connect.\n');
   });
   const shutdown = () => {

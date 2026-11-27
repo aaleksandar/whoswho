@@ -214,10 +214,12 @@ body.home.idle * { cursor: none !important; }
 .mz-card {
   position: absolute;
   z-index: 3;
-  left: 1320px;
-  top: 230px;
-  width: 520px;
-  padding: 40px 40px 36px;
+  left: 1010px;
+  top: 150px;
+  width: 870px;
+  max-height: 710px;
+  overflow: hidden;
+  padding: 40px 48px 30px;
   background: var(--paper);
   box-shadow: 0 2px 0 #E6D6BE, 0 30px 60px rgba(60, 35, 15, 0.22);
   transform: rotate(-1.2deg);
@@ -236,25 +238,11 @@ body.home.idle * { cursor: none !important; }
 }
 .mz-card.off { opacity: 0; transform: rotate(4deg) translateY(30px); }
 .mz-kind { font: 700 15px var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brown); }
-.mz-card h2 { margin: 8px 0 2px; font: 700 76px/0.9 var(--hand); overflow-wrap: anywhere; }
+.mz-card h2 { margin: 8px 0 2px; font: 700 88px/0.9 var(--hand); overflow-wrap: anywhere; }
 .mz-sub { margin: 6px 0 20px; font: 700 17px var(--body); color: var(--brown); }
 .mz-fact { margin: 0; padding: 16px 0; border-top: 1.5px dashed #D9C6AA; }
-.mz-fact q { display: block; font: italic 400 34px/1.08 var(--serif); quotes: none; }
-.mz-fact.empty q { color: var(--brown); font-size: 28px; }
-.mz-card.has-story, .mz-card.has-life { left: 1010px; top: 150px; width: 870px; padding: 40px 48px 34px; }
-.mz-card.has-story h2, .mz-card.has-life h2 { font-size: 88px; }
-.mz-card.has-story .mz-fact q { font-size: 28px; }
-.mz-story {
-  max-height: 520px;
-  overflow: hidden;
-  padding: 6px 0 14px;
-  -webkit-mask-image: linear-gradient(180deg, #000 90%, transparent);
-  mask-image: linear-gradient(180deg, #000 90%, transparent);
-}
-.mz-story p { margin: 0 0 14px; font: 400 36px/1.2 var(--serif); color: var(--ink); }
-.mz-story p:first-child::first-letter { float: left; margin: 6px 10px 0 0; font: 700 92px/0.8 var(--hand); color: #E2557F; }
-.mz-fact.life { padding: 18px 0 22px; }
-.mz-fact.life q { font-size: 52px; line-height: 1.05; }
+.mz-fact q { display: block; font: italic 400 46px/1.06 var(--serif); quotes: none; }
+.mz-fact.empty q { color: var(--brown); font-size: 34px; }
 .mz-fact small { display: block; margin-top: 8px; font: 700 13px var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brown); }
 .mz-top {
   position: absolute;

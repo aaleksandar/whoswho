@@ -1,11 +1,11 @@
 // The Cloud: every secret is a 3D cloud whose weather comes from its words.
 // Anonymous: no names anywhere on this screen. Clouds drift, or cluster by
-// vibe or by voice (said about themselves vs. overheard by friends).
+// by vibe.
 
 import { h } from '../dom.js';
 import { VIBES, groups, forecast, dominant } from '../weather.js';
 
-const MODES = [['drift', 'Drift'], ['vibe', 'By vibe'], ['voice', 'By voice']];
+const MODES = [['drift', 'Drift'], ['vibe', 'By vibe']];
 const MAX_CLOUDS = 35; // the drift layout holds 7 × 5; older secrets still count in the legend
 const SPOT_MS = 4500;
 const MODE_MS = 20000;
@@ -13,7 +13,7 @@ const HOLD_MS = 12000;
 const MODE_HOLD_MS = 40000;
 
 export function createCloudView(root, { geo, onInteract }) {
-  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per secret, each with weather that matches what the secret is about' });
+  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches what the secret is about' });
   const labelsEl = h('div.cw-lbls', { 'aria-label': 'Secrets in the cloud' });
   const groupsEl = h('div', { 'aria-hidden': 'true' });
   const toast = h('div.cw-toast.off', { role: 'status' });
@@ -29,7 +29,7 @@ export function createCloudView(root, { geo, onInteract }) {
     h('header.cw-top',
       h('div.paper-plate.cw-plate', h('h1', 'The Cloud'), forecastEl, chips),
       h('div.mz-stats',
-        h('div.paper-stat', countEl, h('span', 'secrets')),
+        h('div.paper-stat', countEl, h('span', 'fun things')),
         h('div.paper-stat', h('b', '0'), h('span', 'names shown'))),
     ),
     h('div.cw-ctl', h('small', 'Arrange the sky'), seg),
@@ -123,7 +123,7 @@ export function createCloudView(root, { geo, onInteract }) {
 
   function arrival(secret) {
     const v = VIBES[secret.vibe] || VIBES.mist;
-    toast.textContent = `A new secret just floated in: ${v.weather} · ${v.name}`;
+    toast.textContent = `Something fun just floated in: ${v.weather} · ${v.name}`;
     toast.classList.remove('off');
     clearTimeout(toastT);
     toastT = setTimeout(() => toast.classList.add('off'), 4000);
