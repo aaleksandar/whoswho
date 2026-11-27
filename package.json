@@ -12,9 +12,10 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test \"test/*.test.js\"",
-    "seed": "node scripts/seed.mjs",
     "build:data": "node scripts/build-data.mjs",
-    "build:3d": "node scripts/build-3d.mjs"
+    "build:3d": "node scripts/build-3d.mjs",
+    "seed": "node scripts/seed.mjs",
+    "demo": "node scripts/demo.mjs"
   },
   "dependencies": {
     "express": "^5.3.0",

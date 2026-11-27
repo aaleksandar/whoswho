@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 // Adds sample guests (with secrets and wishes) for demos/testing.
-//   npm run seed [-- --clear] [-- --count N]
-// Writes straight to the DB file (DB_PATH from the env or .env, else ./whoswho.sqlite).
-// A running server picks the new guests up on its next request; refresh /home to see them.
+//   npm run seed [-- --clear] [-- --count N] [-- --db FILE]
+// Writes to ./demo.sqlite by default, never the party database, so the real
+// board starts empty. `npm run demo` seeds it and serves it on port 3001.
+// Pass --db whoswho.sqlite only if you really want samples on the real board.
 
 import { openDb } from '../src/db.js';
-import { loadEnvFile } from '../src/env.js';
 import { ANIMALS } from '../public/js/animals.js';
 
 const args = process.argv.slice(2);
 const clear = args.includes('--clear');
 const countIdx = args.indexOf('--count');
+const dbIdx = args.indexOf('--db');
+const DEMO_DB = 'demo.sqlite';
+const file = dbIdx >= 0 ? args[dbIdx + 1] : DEMO_DB;
 
 // [name, postcode district, pin colour, secrets [text, 'self'|'friend'], wish]
 const SAMPLES = [
@@ -39,8 +42,7 @@ const SAMPLES = [
 ];
 const count = countIdx >= 0 ? Number(args[countIdx + 1]) : SAMPLES.length;
 
-loadEnvFile(); // honour DB_PATH from .env
-const db = openDb();
+const db = openDb(file);
 if (clear) console.log(`cleared ${db.deleteAllGuests()} guests`);
 const made = [];
 for (let i = 0; i < count; i++) {
@@ -57,5 +59,5 @@ made.forEach((g, i) => {
     secrets++;
   }
 });
-console.log(`added ${count} sample guests and ${secrets} secrets → ${db.listGuests().length} guests total`);
+console.log(`added ${count} sample guests and ${secrets} secrets → ${db.listGuests().length} guests total in ${file}`);
 db.close();

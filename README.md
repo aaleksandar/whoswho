@@ -47,7 +47,9 @@ Open the Display URL on the TV or projector and press **F** for fullscreen. Gues
 
 > **macOS:** the first time, you may be asked whether to let `node` accept incoming connections. Click **Allow**, or phones won't be able to connect.
 
-Want something to look at first? `npm run seed` adds 22 sample guests with their secrets and wishes (`npm run seed -- --clear` wipes existing guests first).
+The real board starts empty and fills up as guests join.
+
+Want something to look at first? `npm run demo` starts a separate demo board on port 3001, with 22 sample guests and their secrets and wishes. It uses its own `demo.sqlite`, which is reset on every run, so the sample data never reaches the real board. (`npm run seed` writes the same samples into `demo.sqlite` without starting a server. Add `-- --db whoswho.sqlite` only if you really want them on the real board.)
 
 ## From outside your network
 
