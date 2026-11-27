@@ -11,6 +11,7 @@ const SKYLINE = `<svg class="wi-sky" viewBox="0 0 1920 300" preserveAspectRatio=
 <path fill="#120B30" d="M0 300v-44c180 10 340-8 520 0s360 18 560 6 380-14 560-4 200 8 280 0V300Z"/>
 </svg>`;
 const MIN_SPAN = 1500;
+const RISE = 14; // px per second at the stage's scale: a slow, drifting climb
 const GAP = 70; // vertical room per lantern, so a full sky doesn't pile up
 
 export function createWishesView(root) {
@@ -63,7 +64,7 @@ export function createWishesView(root) {
     const l = lanterns.find((x) => x.id === wishId);
     if (!l) return;
     l.zp = Math.PI / 2 - T * 0.06; // close to the viewer (z = 1)…
-    const speed = 34 * l.sp * (0.55 + 0.6);
+    const speed = RISE * l.sp * (0.55 + 0.6);
     l.off = ((-T * speed) % SPAN + SPAN) % SPAN; // …and starting at the rooftops
     l.glow = 8;
   }
@@ -76,13 +77,13 @@ export function createWishesView(root) {
     for (const w of lanterns) {
       const z = 0.5 + 0.5 * Math.sin(T * 0.06 + w.zp);
       const sc = 0.42 + 0.68 * z;
-      const y = 1160 - ((T * 34 * w.sp * (0.55 + z * 0.6) + w.off) % SPAN);
-      const x = w.x + Math.sin(T * 0.25 + w.ph) * 46 + (w.x - 960) * (z - 0.5) * 0.25;
+      const y = 1160 - ((T * RISE * w.sp * (0.55 + z * 0.6) + w.off) % SPAN);
+      const x = w.x + Math.sin(T * 0.15 + w.ph) * 40 + (w.x - 960) * (z - 0.5) * 0.25;
       const fadeIn = Math.min(1, (1160 - y) / 260);
       const fadeOut = Math.min(1, (y + 340) / 380);
       const op = Math.max(0, Math.min(fadeIn, fadeOut)) * (0.35 + 0.65 * z);
       const el = w.el;
-      el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-50%,0) scale(${sc.toFixed(3)}) rotate(${(Math.sin(T * 0.4 + w.ph) * 4).toFixed(2)}deg)`;
+      el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-50%,0) scale(${sc.toFixed(3)}) rotate(${(Math.sin(T * 0.25 + w.ph) * 3).toFixed(2)}deg)`;
       el.style.opacity = op.toFixed(3);
       el.style.filter = z < 0.45 ? `blur(${((0.45 - z) * 6).toFixed(2)}px)` : 'none';
       el.style.zIndex = String(Math.round(z * 100));
