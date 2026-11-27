@@ -157,11 +157,28 @@ describe('API (open admin)', () => {
 
     const info = (await s.call('GET', '/api/info')).json;
     assert.match(info.hiUrl, /^http:\/\/[^/]+:\d+\/hi$/);
+    // Reached through a tunnel (Cloudflare sets these): the QR uses the public address.
+    const tunnelled = (await s.call('GET', '/api/info', undefined, { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'party.trycloudflare.com' })).json;
+    assert.equal(tunnelled.hiUrl, 'https://party.trycloudflare.com/hi');
+    // A spoofed LAN-ish host without a proxy proto header is ignored.
+    assert.match((await s.call('GET', '/api/info', undefined, { host: 'evil.example' })).json.hiUrl, /^http:\/\/[^/]+:\d+\/hi$/);
     const qr = await s.call('GET', '/api/qr.svg');
     assert.equal(qr.status, 200);
     assert.match(qr.headers.get('content-type'), /image\/svg\+xml/);
     assert.match(qr.text, /<svg/);
     assert.equal((await s.call('GET', '/api/nope')).status, 404);
+  });
+
+  test('polling fallback returns events in order, and asks for a reset when behind', async () => {
+    const start = (await s.call('GET', '/api/poll?since=-1')).json;
+    assert.equal(start.reset, true);
+    await s.call('POST', '/api/guests', { name: 'Poller' });
+    const r = (await s.call('GET', `/api/poll?since=${start.seq}`)).json;
+    assert.equal(r.reset, false);
+    assert.deepEqual(r.events.map((e) => [e.seq, e.event, e.data.type]), [[start.seq + 1, 'guests', 'created']]);
+    assert.equal(r.events[0].data.guest.name, 'Poller');
+    assert.equal((await s.call('GET', `/api/poll?since=${r.seq}`)).json.events.length, 0);
+    assert.equal((await s.call('GET', `/api/poll?since=${r.seq + 100}`)).json.reset, true, 'server restarted');
   });
 
   test('SSE stream announces new guests and secrets, without the author', async () => {
@@ -178,7 +195,8 @@ describe('API (open admin)', () => {
       buf += dec.decode(value);
     }
     ctrl.abort();
-    assert.match(buf, /event: guests\ndata: .*"name":"Live"/);
+    assert.match(buf, /event: hello\ndata: \d+/);
+    assert.match(buf, /id: \d+\nevent: guests\ndata: .*"name":"Live"/);
     assert.match(buf, /event: secrets\ndata: .*"vibe":"happy"/);
     assert.ok(!/author|token/.test(buf.split('event: secrets')[1]));
   });

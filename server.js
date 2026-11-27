@@ -25,20 +25,36 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
 
-  const urls = () => {
-    const base = `http://${lanHost()}:${getPort()}`;
+  // Where other devices should go. PUBLIC_URL wins; otherwise, a request that
+  // came through a tunnel or proxy (Cloudflare, ngrok…) uses that public
+  // address, so the QR works from outside the network; else the LAN address.
+  const urls = (req) => {
+    let base = process.env.PUBLIC_URL?.replace(/\/+$/, '');
+    const host = req?.get('x-forwarded-host') || req?.get('host');
+    const proto = req?.get('x-forwarded-proto')?.split(',')[0].trim();
+    if (!base && host && /^https?$/.test(proto || '') && !/^(localhost|\[|\d+\.\d+\.\d+\.\d+)/.test(host)) base = `${proto}://${host}`;
+    base ||= `http://${lanHost()}:${getPort()}`;
     return { base, hiUrl: `${base}/hi`, homeUrl: `${base}/home`, adminUrl: `${base}/hax0r` };
   };
 
   // ------------------------------------------------------------- live (SSE)
+  // Every event gets a sequence number and is kept briefly, so a page behind
+  // a proxy that buffers SSE (e.g. a Cloudflare quick tunnel) can poll
+  // /api/poll instead and still see every event, in order.
   const clients = new Set();
+  const recent = [];
+  let seq = 0;
   const broadcast = (event, data) => {
-    const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    seq++;
+    recent.push({ seq, event, data });
+    if (recent.length > 500) recent.shift();
+    const msg = `id: ${seq}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const res of clients) res.write(msg);
   };
+  // A real event (not a comment), so pages can tell the stream is alive.
   const heartbeat = setInterval(() => {
-    for (const res of clients) res.write(': ping\n\n');
-  }, 25_000);
+    for (const res of clients) res.write(`event: ping\ndata: ${seq}\n\n`);
+  }, 15_000);
   heartbeat.unref();
   app.locals.closeClients = () => {
     clearInterval(heartbeat);
@@ -54,9 +70,22 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
       'X-Accel-Buffering': 'no',
     });
     res.flushHeaders();
-    res.write('retry: 3000\n\n');
+    res.write(`retry: 3000\nevent: hello\ndata: ${seq}\n\n`);
     clients.add(res);
     req.on('close', () => clients.delete(res));
+  });
+
+  // Polling fallback: events after `since`. reset=true means the page missed
+  // some (or the server restarted) and should reload everything.
+  app.get('/api/poll', (req, res) => {
+    const since = Number(req.query.since);
+    const oldest = recent.length ? recent[0].seq : seq + 1;
+    const known = Number.isInteger(since) && since >= 0 && since <= seq;
+    res.set('Cache-Control', 'no-store').json({
+      seq,
+      reset: !known || since < oldest - 1,
+      events: known ? recent.filter((e) => e.seq > since) : [],
+    });
   });
 
   // ------------------------------------------------------------------ pages
@@ -116,12 +145,12 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
     res.json({ valid: true, known: !!hit, outcode: parsed.outcode, area: hit?.area ?? null });
   });
 
-  app.get('/api/info', (_req, res) =>
-    res.json({ ...urls(), host: lanHost(), port: getPort() }),
+  app.get('/api/info', (req, res) =>
+    res.json({ ...urls(req), host: lanHost(), port: getPort() }),
   );
 
-  app.get('/api/qr.svg', async (_req, res) => {
-    const svg = await QRCode.toString(urls().hiUrl, {
+  app.get('/api/qr.svg', async (req, res) => {
+    const svg = await QRCode.toString(urls(req).hiUrl, {
       type: 'svg',
       margin: 1,
       errorCorrectionLevel: 'M',

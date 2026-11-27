@@ -49,6 +49,22 @@ Open the Display URL on the TV or projector and press **F** for fullscreen. Gues
 
 Want something to look at first? `npm run seed` adds 22 sample guests with their secrets and wishes (`npm run seed -- --clear` wipes existing guests first).
 
+## From outside your network
+
+The quickest way is a Cloudflare quick tunnel. It needs no account, and you don't have to change anything on your router:
+
+```sh
+npm start                                        # in one terminal
+cloudflared tunnel --url http://localhost:3000   # in another; prints https://<random>.trycloudflare.com
+```
+
+Open `https://<random>.trycloudflare.com/home` on the display. When a page is opened through a tunnel, the QR code and links use the tunnel's address, so phones outside the network can join. Set `PUBLIC_URL` if you want to force a particular address.
+
+- **Set `ADMIN_PASSWORD` first.** Otherwise anyone with the link can open `/hax0r` and delete everyone.
+- **Live updates use polling.** Quick tunnels don't pass Server-Sent Events, so the display and admin page fall back to polling every 2.5 s. You may see a short delay; nothing else changes.
+- **The address changes every time `cloudflared` restarts.** Reload the display after a restart so the QR updates.
+- **Quick tunnels have no uptime guarantee.** For the night itself, use the local network or a named Cloudflare tunnel on your own domain.
+
 ## Configuration
 
 Settings come from environment variables, or from a `.env` file in the project folder. Copy `.env.example` to `.env` and fill it in. `.env` is git-ignored, and anything already set in your shell wins over it.
@@ -59,6 +75,7 @@ Settings come from environment variables, or from a `.env` file in the project f
 | `DB_PATH`        | `./whoswho.sqlite` | SQLite database file                                                                         |
 | `ADMIN_PASSWORD` | *(unset)*          | Puts `/hax0r` and the admin API behind HTTP Basic auth (any username)                        |
 | `PUBLIC_HOST`    | *(auto)*           | Overrides the auto-detected LAN IP used in the QR code (e.g. if a VPN interface gets picked) |
+| `PUBLIC_URL`     | *(auto)*           | Full public address for the QR code (e.g. a tunnel); pages opened through a tunnel detect it |
 
 Set the event title, the seconds each view stays on screen, and which views are in rotation from `/hax0r`. Changes apply to the display live.
 
