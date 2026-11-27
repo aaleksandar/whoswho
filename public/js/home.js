@@ -25,7 +25,7 @@ const bar = $('#progress');
 const sections = Object.fromEntries([...document.querySelectorAll('.view')].map((el) => [el.dataset.view, el]));
 
 let views = {};
-let state = { guests: [], secrets: [] };
+let state = { guests: [], secrets: [], wishes: [] };
 let settings = { title: "Who's here?", rotateSeconds: 40, views: ['map', 'cloud', 'wishes'] };
 let current = null;
 let startedAt = 0;
@@ -146,8 +146,8 @@ function pushState() {
 }
 
 async function loadAll() {
-  const [guests, secrets] = await Promise.all([api('GET', '/api/guests'), api('GET', '/api/secrets')]);
-  state = { guests, secrets };
+  const [guests, secrets, wishes] = await Promise.all([api('GET', '/api/guests'), api('GET', '/api/secrets'), api('GET', '/api/wishes')]);
+  state = { guests, secrets, wishes };
   pushState();
 }
 
@@ -160,10 +160,19 @@ async function onGuests(e) {
   if (e.type === 'created') {
     toast(sticker(g.avatar.animal, 128), h('div', h('small', 'Welcome to the zoo!'), h('b', `${g.name}, the ${animalLabel(g.avatar.animal).toLowerCase()}`)));
     if (g.lat != null && jumpTo('map')) views.map.highlight(g.id);
-  } else if (e.wish && g.need) {
-    if (jumpTo('wishes')) views.wishes.highlight(g.id);
-    else toast(h('div', h('small', 'A new lantern is rising'), h('b', g.need)));
+  } else if (e.story && g.story && g.lat != null) {
+    // Their story just arrived: fly to them so the room can read it.
+    if (jumpTo('map') || current === 'map') views.map.highlight(g.id);
+    else toast(sticker(g.avatar.animal, 128), h('div', h('small', 'A new story on the map'), h('b', `${g.name}, the ${animalLabel(g.avatar.animal).toLowerCase()}`)));
   }
+}
+
+async function onWishes(e) {
+  state = { ...state, wishes: await api('GET', '/api/wishes') };
+  pushState();
+  if (e?.type !== 'created') return;
+  if (jumpTo('wishes') || current === 'wishes') views.wishes.highlight(e.wish.id);
+  else toast(h('div', h('small', 'A new lantern is rising'), h('b', e.wish.text)));
 }
 
 async function onSecrets(e) {
@@ -252,6 +261,7 @@ async function boot() {
   live({
     guests: (e) => onGuests(e).catch(() => {}),
     secrets: (e) => onSecrets(e).catch(() => {}),
+    wishes: (e) => onWishes(e).catch(() => {}),
     settings: applySettings,
     onResync: () => resync().catch(() => {}),
   });

@@ -1,5 +1,6 @@
 // The Map: a 3D zoo over paper London. Every guest is a spirit animal hopping
-// on their postcode district; the card shows the secrets tied to them.
+// on their postcode district. The tour is about the people: each card shows a
+// guest's story (or their own words) big enough to read across the room.
 
 import { h } from '../dom.js';
 import { PALETTE, animalLabel } from '../animals.js';
@@ -9,7 +10,10 @@ const RIVER = ['Richmond upon Thames', 'Kingston upon Thames', 'Hounslow', 'Hamm
 const PAPER = ['#F2D3A8', '#EDB9A0', '#BFDCB0', '#B5CDE8', '#EFCB7E', '#D9B6DC', '#F5C7A3'];
 const TOUR_MS = 7000;
 const HOLD_MS = 15000; // after someone taps an animal (or a new guest lands)
-const MAX_FACTS = 4;
+const READ_MS = 24000; // time on a guest with a story: long enough to read it
+const WORDS_MS = 13000; // …or with just their own words
+const WIDE_EVERY = 6; // a wide shot of London between every few guests
+const MAX_FACTS = 3;
 
 export function createMapView(root, { geo, onInteract }) {
   const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': 'Paper pop-up model of London with landmarks, parks and traffic, and a hopping spirit animal for each guest' });
@@ -44,6 +48,7 @@ export function createMapView(root, { geo, onInteract }) {
   let touched = 0;
   let tourAt = 0;
   let tour = null;
+  let focusedAt = 0;
   let map = null;
   let visible = false;
 
@@ -51,6 +56,7 @@ export function createMapView(root, { geo, onInteract }) {
 
   function setFocus(i) {
     focus = i;
+    focusedAt = Date.now();
     renderCard();
   }
 
@@ -81,7 +87,7 @@ export function createMapView(root, { geo, onInteract }) {
       onTouch: () => { touched = Date.now(); onInteract?.(); },
       pins: () => pinEls,
       lead: () => lead,
-      cardAt: [1320, 320],
+      cardAt: [1010, 300],
     });
     syncMarkers();
   }
@@ -101,22 +107,39 @@ export function createMapView(root, { geo, onInteract }) {
     card.classList.toggle('off', !g);
     if (!g) return;
     const facts = secrets.filter((s) => s.aboutId === g.id);
-    const shown = facts.slice(-MAX_FACTS).reverse();
+    const animal = animalLabel(g.animal).toLowerCase();
+    // A story takes most of the card, so it leaves room for one secret only.
+    const shown = facts.slice(g.story ? -1 : -MAX_FACTS).reverse();
+    const factEls = shown.map((f) => h('p.mz-fact', h('q', f.text), h('small', f.by === 'self' ? 'In their own words' : 'Overheard by a friend')));
+    let lead = null;
+    if (g.story) {
+      lead = h('div.mz-story', ...g.story.split(/\n+/).map((para) => h('p', para)));
+    } else if (g.life) {
+      lead = h('p.mz-fact.life', h('q', g.life), h('small', `Life as a ${animal}, in their words`));
+    }
+    const sub = g.story
+      ? (facts.length > 1 ? `As told by the storyteller · ${facts.length} things the room knows` : 'As told by the storyteller')
+      : facts.length === 0 ? 'Nobody has spilled anything yet' : facts.length === 1 ? 'One thing the room knows' : `${facts.length} things the room knows`;
+    card.classList.toggle('has-story', !!g.story);
+    card.classList.toggle('has-life', !g.story && !!g.life);
     card.replaceChildren(
       h('span.mz-kind', [g.code, g.area].filter(Boolean).join(' · ') || 'London'),
-      h('h2', `${g.name}, the ${g.animal}`),
-      h('p.mz-sub', facts.length === 0 ? 'Nobody has spilled anything yet' : facts.length === 1 ? 'One thing the room knows' : `${facts.length} things the room knows`),
-      ...(shown.length
-        ? shown.map((f) => h('p.mz-fact', h('q', f.text), h('small', f.by === 'self' ? 'In their own words' : 'Overheard by a friend')))
-        : [h('p.mz-fact.empty', h('q', 'Know something about them? Drop it from your phone.'))]),
+      h('h2', `${g.name}, the ${animal}`),
+      h('p.mz-sub', sub),
+      lead,
+      ...(factEls.length || lead ? factEls : [h('p.mz-fact.empty', h('q', 'Know something about them? Drop it from your phone.'))]),
     );
   }
 
   function step() {
     if (!visible || Date.now() - touched < HOLD_MS || !guests.length) return;
-    // wide shot every few guests, so the room sees the whole of London
+    // stay on a person long enough to read what's on their card
+    const g = guests[focus];
+    const dwell = g?.story ? READ_MS : g?.life ? WORDS_MS : 0;
+    if (Date.now() - focusedAt < dwell) return;
+    // the odd wide shot, so the room sees the whole of London
     const seq = [];
-    guests.forEach((_, i) => { if (i % 3 === 0) seq.push(-1); seq.push(i); });
+    guests.forEach((_, i) => { if (i % WIDE_EVERY === 0) seq.push(-1); seq.push(i); });
     tourAt = (tourAt + 1) % seq.length;
     setFocus(seq[tourAt]);
   }

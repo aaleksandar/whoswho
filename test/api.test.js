@@ -269,4 +269,33 @@ test('a v2 database (old avatars, old views) migrates cleanly', async (t) => {
   assert.equal(g.need, 'a nap');
   assert.deepEqual(db.getSettings().views, ['map', 'cloud', 'wishes']);
   assert.equal(db.addSecret({ text: 'migrated', aboutId: g.id }).by, 'friend');
+  assert.deepEqual(db.listWishes().map((w) => [w.guestId, w.text]), [[g.id, 'a nap']], 'old wishes become lanterns');
+});
+
+test('wishes: as many lanterns as you like, moderated one by one', async (t) => {
+  const s = await start({ adminPassword: '' });
+  t.after(() => s.stop());
+  const { token, guest } = (await s.call('POST', '/api/guests', { name: 'Hana', need: 'a Spanish teacher' })).json;
+  const auth = { 'x-guest-token': token };
+  const a = await s.call('POST', '/api/wishes', { text: '  more honey jars ' }, auth);
+  assert.equal(a.status, 201);
+  assert.equal(a.json.wish.text, 'more honey jars');
+  assert.equal(a.json.me.need, 'more honey jars', 'need is the latest wish');
+  await s.call('PUT', '/api/me', { need: 'a quiet Sunday' }, auth); // older phones
+  let list = (await s.call('GET', '/api/wishes')).json;
+  assert.deepEqual(list.map((w) => w.text), ['a Spanish teacher', 'more honey jars', 'a quiet Sunday']);
+  assert.ok(list.every((w) => w.guestId === guest.id));
+  assert.equal((await s.call('POST', '/api/wishes', { text: 'x' }, auth)).status, 400);
+  assert.equal((await s.call('POST', '/api/wishes', { text: 'no token' })).status, 401);
+
+  assert.equal((await s.call('DELETE', `/api/admin/wishes/${list[2].id}`)).status, 204);
+  assert.equal((await s.call('DELETE', `/api/admin/wishes/${list[2].id}`)).status, 404);
+  const me = (await s.call('GET', '/api/me', undefined, auth)).json;
+  assert.equal(me.need, 'more honey jars', 'deleting the latest falls back to the one before');
+
+  // admin edits don't touch wishes; deleting the guest takes their lanterns
+  await s.call('PUT', `/api/admin/guests/${guest.id}`, { name: 'Hana B' });
+  assert.equal((await s.call('GET', '/api/wishes')).json.length, 2);
+  await s.call('DELETE', `/api/admin/guests/${guest.id}`);
+  assert.equal((await s.call('GET', '/api/wishes')).json.length, 0);
 });

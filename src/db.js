@@ -6,7 +6,7 @@ import { normalizeAvatar } from '../public/js/animals.js';
 import { classify } from '../public/js/weather.js';
 import { resolveLocation } from './postcode.js';
 
-export const LIMITS = { name: 40, need: 140, secret: 140 };
+export const LIMITS = { name: 40, need: 140, secret: 140, life: 280, story: 1200 };
 export const VIEW_IDS = ['map', 'cloud', 'wishes'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -45,6 +45,19 @@ const MIGRATIONS = [
      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
    );
    CREATE INDEX secrets_about ON secrets(about_id);`,
+  // v4: "my life as an animal" in the guest's words, and the story told from it
+  `ALTER TABLE guests ADD COLUMN life TEXT;
+   ALTER TABLE guests ADD COLUMN story TEXT;`,
+  // v5: as many wishes (lanterns) as you like; guests.need keeps the latest
+  `CREATE TABLE wishes (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     guest_id INTEGER NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+     text TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+   );
+   CREATE INDEX wishes_guest ON wishes(guest_id);
+   INSERT INTO wishes (guest_id, text, created_at)
+     SELECT id, need, COALESCE(updated_at, created_at) FROM guests WHERE need IS NOT NULL AND need != '';`,
 ];
 
 export class ValidationError extends Error {
@@ -59,6 +72,12 @@ export class AuthError extends Error {}
 const cleanText = (v, max) =>
   typeof v === 'string' ? v.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
+// Stories keep their paragraph breaks; everything else is single-line.
+const cleanStory = (v) =>
+  typeof v === 'string'
+    ? v.normalize('NFKC').replace(/\r/g, '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, LIMITS.story) || null
+    : null;
+
 /** Validate + normalise user input. Throws ValidationError. */
 export function cleanGuestInput(input) {
   const src = input && typeof input === 'object' ? input : {};
@@ -68,6 +87,7 @@ export function cleanGuestInput(input) {
     name,
     avatar: normalizeAvatar(src.avatar),
     need: cleanText(src.need, LIMITS.need) || null,
+    life: cleanText(src.life, LIMITS.life) || null,
     postcodeInput: typeof src.postcode === 'string' ? src.postcode : '',
   };
 }
@@ -78,6 +98,8 @@ function rowToGuest(r) {
     name: r.name,
     avatar: normalizeAvatar(JSON.parse(r.avatar)), // maps old 2D avatars too
     need: r.need,
+    life: r.life ?? null,
+    story: r.story ?? null,
     postcode: r.postcode,
     area: r.area,
     lat: r.lat,
@@ -92,6 +114,8 @@ export function publicGuest(g) {
   const { postcode, ...rest } = g;
   return { ...rest, outcode: g.area && postcode ? postcode.split(' ')[0] : null };
 }
+
+const rowToWish = (r) => ({ id: r.id, guestId: r.guest_id, text: r.text, createdAt: r.created_at });
 
 const rowToSecret = (r) => ({ id: r.id, text: r.text, vibe: r.vibe, by: r.by, aboutId: r.about_id, createdAt: r.created_at });
 
@@ -116,11 +140,21 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     all: db.prepare('SELECT * FROM guests ORDER BY id'),
     get: db.prepare('SELECT * FROM guests WHERE id = ?'),
     byToken: db.prepare('SELECT * FROM guests WHERE token = ?'),
-    insert: db.prepare('INSERT INTO guests (name, avatar, need, token) VALUES (?, ?, ?, ?)'),
+    insert: db.prepare('INSERT INTO guests (name, avatar, need, life, token) VALUES (?, ?, ?, ?, ?)'),
     update: db.prepare(
-      `UPDATE guests SET name = ?, avatar = ?, need = ?,
+      `UPDATE guests SET name = ?, avatar = ?,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
     ),
+    setLife: db.prepare(`UPDATE guests SET life = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`),
+    setStory: db.prepare(`UPDATE guests SET story = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`),
+    wishesAll: db.prepare('SELECT * FROM wishes ORDER BY id'),
+    wishesOf: db.prepare('SELECT * FROM wishes WHERE guest_id = ? ORDER BY id'),
+    wishGet: db.prepare('SELECT * FROM wishes WHERE id = ?'),
+    wishInsert: db.prepare('INSERT INTO wishes (guest_id, text) VALUES (?, ?)'),
+    wishDel: db.prepare('DELETE FROM wishes WHERE id = ?'),
+    wishesDelAll: db.prepare('DELETE FROM wishes'),
+    latestWish: db.prepare('SELECT text FROM wishes WHERE guest_id = ? ORDER BY id DESC LIMIT 1'),
+    selfSecrets: db.prepare(`SELECT text FROM secrets WHERE about_id = ? AND by = 'self' ORDER BY id`),
     setNeed: db.prepare(`UPDATE guests SET need = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`),
     setLoc: db.prepare('UPDATE guests SET postcode = ?, area = ?, lat = ?, lng = ? WHERE id = ?'),
     del: db.prepare('DELETE FROM guests WHERE id = ?'),
@@ -184,8 +218,9 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       const c = cleanGuestInput(input);
       const token = randomBytes(18).toString('base64url');
       return tx(() => {
-        const { lastInsertRowid } = q.insert.run(c.name, JSON.stringify(c.avatar), c.need, token);
+        const { lastInsertRowid } = q.insert.run(c.name, JSON.stringify(c.avatar), c.need, c.life, token);
         const id = Number(lastInsertRowid);
+        if (c.need) q.wishInsert.run(id, c.need);
         applyLocation(id, c.postcodeInput);
         return { guest: rowToGuest(q.get.get(id)), token };
       });
@@ -196,26 +231,65 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
       return tx(() => {
         const existing = q.get.get(id);
         if (!existing) return null;
-        q.update.run(c.name, JSON.stringify(c.avatar), c.need, id);
+        q.update.run(c.name, JSON.stringify(c.avatar), id); // wishes are moderated one by one
+        // Older admin pages don't send these: leave them alone unless given.
+        if (input && 'life' in input) q.setLife.run(c.life, id);
+        if (input && 'story' in input) q.setStory.run(cleanStory(input.story), id);
         applyLocation(id, c.postcodeInput);
         return rowToGuest(q.get.get(id));
       });
     },
 
-    /** The phone's wish ("what do you need in life?"). Throws AuthError. */
-    setWish(token, need) {
+    // ---------------------------------------------------------------- wishes
+    /** A new lantern ("what do you need in life right now?"). Throws AuthError. */
+    addWish(token, text) {
       const me = authorFor(token);
-      const clean = cleanText(need, LIMITS.need);
+      const clean = cleanText(text, LIMITS.need);
       if (clean.length < 2) throw new ValidationError('Write a few words first', 'need');
-      q.setNeed.run(clean, me.id);
+      return tx(() => {
+        const { lastInsertRowid } = q.wishInsert.run(me.id, clean);
+        q.setNeed.run(clean, me.id);
+        return { guest: rowToGuest(q.get.get(me.id)), wish: rowToWish(q.wishGet.get(Number(lastInsertRowid))) };
+      });
+    },
+
+    listWishes: () => q.wishesAll.all().map(rowToWish),
+    wishesOf: (guestId) => q.wishesOf.all(guestId).map(rowToWish),
+
+    /** Moderation. Returns the guest whose wish it was, or null. */
+    deleteWish(id) {
+      return tx(() => {
+        const w = q.wishGet.get(id);
+        if (!w) return null;
+        q.wishDel.run(id);
+        q.setNeed.run(q.latestWish.get(w.guest_id)?.text ?? null, w.guest_id);
+        return rowToGuest(q.get.get(w.guest_id));
+      });
+    },
+
+    /** "My life as an animal", from the phone. Throws AuthError. */
+    setLife(token, life) {
+      const me = authorFor(token);
+      const clean = cleanText(life, LIMITS.life);
+      if (clean.length < 3) throw new ValidationError('Write a few words first', 'life');
+      q.setLife.run(clean, me.id);
       return rowToGuest(q.get.get(me.id));
     },
+
+    setStory(id, story) {
+      q.setStory.run(cleanStory(story), id);
+      return q.get.get(id) ? rowToGuest(q.get.get(id)) : null;
+    },
+
+    /** What the guest has said about themselves, for the storyteller. */
+    selfSecrets: (id) => q.selfSecrets.all(id).map((r) => r.text),
 
     deleteGuest: (id) => q.del.run(id).changes > 0,
 
     deleteAllGuests: () =>
       tx(() => {
         q.secretsDelAll.run();
+        q.wishesDelAll.run();
         return Number(q.delAll.run().changes);
       }),
 

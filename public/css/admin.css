@@ -346,6 +346,7 @@ body.admin {
   color: var(--term);
 }
 .ad-dialog input,
+.ad-dialog textarea,
 .ad-dialog select,
 .ad-main select {
   width: 100%;
@@ -388,3 +389,13 @@ body.admin {
   margin-right: 6px;
   border-radius: 50%;
 }
+
+.ad-story { max-width: 320px; }
+.ad-story span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.35; }
+.ad-story small { display: block; margin-top: 4px; font-size: 11px; color: var(--ad-dim, #8a8a8a); }
+.ad-dialog textarea { resize: vertical; font: inherit; line-height: 1.4; }
+
+.ad-need small { display: block; margin-top: 2px; font-size: 11px; color: var(--ad-dim, #8a8a8a); }
+.ad-wishes { display: grid; gap: 6px; margin: 4px 0 14px; }
+.ad-wishes .ad-label { font-size: 13px; font-weight: 600; }
+.ad-wish { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 8px; background: rgba(127, 127, 127, 0.1); font-size: 14px; }

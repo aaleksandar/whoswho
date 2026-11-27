@@ -1,5 +1,6 @@
-// Phone: join (name, postcode, spirit animal) → drop secrets and wishes, as
-// often as you like. The phone remembers who it is with a token from the server.
+// Phone: join (name, postcode, spirit animal, your life as that animal) → read
+// the story the storyteller makes of it → drop secrets and wishes, as often as
+// you like. The phone remembers who it is with a token from the server.
 
 import { h, $, debounce } from './dom.js';
 import { api } from './api.js';
@@ -32,7 +33,11 @@ const stickerFor = (animal) => {
   return copy;
 };
 
+let screenNo = 0; // lets a slow poll tell whether its screen is still showing
+let pollT;
 function screen(...children) {
+  screenNo++;
+  clearTimeout(pollT);
   main.replaceChildren(h('div.scr', ...children));
   window.scrollTo({ top: 0 });
 }
@@ -67,12 +72,15 @@ function showJoin() {
   const grid = h('div.zoo', { role: 'radiogroup', 'aria-label': 'Spirit animal' });
   const swatches = h('div.sw', { role: 'radiogroup', 'aria-label': 'Token colour' });
   const preview = h('div.pick-preview');
+  const lifeLabel = h('label', { for: 'lf' });
+  const life = h('textarea.ta.life#lf', { maxlength: 280, rows: 4, placeholder: '…I’d live on a canal boat, steal chips from tourists and nap through every meeting' });
 
   function renderPick() {
     preview.replaceChildren(
       h('span.pick-art', { style: { background: PALETTE[pick.color][1] } }, stickerFor(pick.animal)),
-      h('span', h('b', `The ${pick.animal}`), h('small', 'hops on the big map with your name')),
+      h('span', h('b', `The ${animalLabel(pick.animal).toLowerCase()}`), h('small', 'hops on the big map with your name')),
     );
+    lifeLabel.textContent = `Your life as a ${animalLabel(pick.animal).toLowerCase()}`;
     grid.replaceChildren(...ANIMALS.map((a) =>
       h('button', {
         type: 'button', role: 'radio', class: a === pick.animal ? 'on' : '', 'aria-checked': String(a === pick.animal),
@@ -102,13 +110,18 @@ function showJoin() {
       e.preventDefault();
       err.textContent = '';
       if (!name.value.trim()) { err.textContent = 'Tell us your name first.'; name.focus(); return; }
+      if (life.value.trim().length < 10) {
+        err.textContent = `Tell us a little about your life as a ${animalLabel(pick.animal).toLowerCase()} first.`;
+        life.focus();
+        return;
+      }
       go.disabled = true;
       try {
-        const r = await api('POST', '/api/guests', { name: name.value, postcode: pc.value, avatar: pick });
+        const r = await api('POST', '/api/guests', { name: name.value, postcode: pc.value, avatar: pick, life: life.value });
         token = r.token;
         me = r.guest;
         store.set(token);
-        showDrop({ justJoined: true });
+        showStory({ justJoined: true });
       } catch (ex) {
         err.textContent = ex.message;
         go.disabled = false;
@@ -121,10 +134,107 @@ function showJoin() {
   h('div.field', h('label', { for: 'pc' }, 'Postcode'), pc, pcHelp),
   h('div.field', h('label', 'Your spirit animal'), preview, grid),
   h('div.field', h('label', 'Token colour'), swatches),
+  h('div.field', lifeLabel, life,
+    h('p.help', 'Where would you live? What would you do all day? Who would you annoy? The storyteller takes it from there, and it goes up on the big screen.')),
   err,
   go);
 
   renderPick();
+  screen(bar(), form);
+}
+
+// -------------------------------------------------------------------- story
+const animalOf = () => animalLabel(me.avatar.animal).toLowerCase();
+
+function showStory({ justJoined = false } = {}) {
+  if (!me.life) return showLife();
+  const head = h('h1', 'Your life as a ', h('span', animalOf()));
+  const parts = [bar()];
+  if (justJoined) parts.push(h('div.tick', { role: 'status' }, me.lat != null ? `You’re on the map over ${me.outcode}. Look at the screen!` : 'You’re in! Look at the screen.'));
+  parts.push(head);
+
+  if (me.storyPending) {
+    parts.push(
+      h('div.story.writing', { 'aria-live': 'polite' },
+        h('p.quill', 'The storyteller is writing', h('span.dots', h('i'), h('i'), h('i'))),
+        h('p.yours', h('q', me.life))),
+      h('p.help', 'Takes a few seconds. It’ll pop up here and on the big screen.'),
+    );
+    pollStory();
+  } else if (me.story) {
+    parts.push(
+      h('article.story', { 'aria-label': 'Your story' }, ...me.story.split(/\n+/).map((p) => h('p', p))),
+      h('p.help', 'It’s on the big screen too, on your animal’s card.'),
+    );
+  } else {
+    parts.push(
+      h('div.story', h('p.yours', h('q', me.life)), h('small', 'In your words')),
+      h('p.help', me.storiesOn
+        ? 'The storyteller lost the thread on this one. Try again?'
+        : 'Your words are on the big screen with your animal.'),
+    );
+  }
+
+  parts.push(h('button.go', { type: 'button', onclick: () => showDrop() }, 'Drop a secret or a wish'));
+  if (me.storiesOn && !me.storyPending && me.tellsLeft > 0) {
+    parts.push(h('button.ghost', { type: 'button', onclick: retell }, me.story ? `Tell it again (${me.tellsLeft} left)` : 'Try again'));
+  }
+  parts.push(h('button.ghost', { type: 'button', onclick: showLife }, 'Change what I wrote'));
+  screen(...parts);
+}
+
+// While the story is being written, check back until it's there.
+function pollStory() {
+  const at = screenNo;
+  pollT = setTimeout(async () => {
+    try {
+      const g = await api('GET', '/api/me', undefined, auth());
+      if (at !== screenNo) return;
+      me = g;
+      if (me.storyPending) return pollStory();
+      showStory();
+    } catch (ex) {
+      if (ex.status === 401) return lostToken();
+      if (at === screenNo) pollStory();
+    }
+  }, 2500);
+}
+
+async function retell() {
+  try {
+    me = await api('POST', '/api/me/story', undefined, auth());
+  } catch (ex) {
+    if (ex.status === 401) return lostToken();
+    me = { ...me, tellsLeft: ex.status === 429 ? 0 : me.tellsLeft };
+  }
+  showStory();
+}
+
+function showLife() {
+  const err = h('p.err', { role: 'alert' });
+  const ta = h('textarea.ta.life#lf', { maxlength: 280, rows: 5, value: me.life || '', placeholder: '…I’d live on a canal boat, steal chips from tourists and nap through every meeting' });
+  const go = h('button.go', { type: 'submit' }, me.storiesOn ? 'Tell my story' : 'Save');
+  const form = h('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      if (ta.value.trim().length < 10) { err.textContent = 'A few more words, please.'; ta.focus(); return; }
+      go.disabled = true;
+      try {
+        me = await api('PUT', '/api/me', { life: ta.value }, auth());
+        showStory();
+      } catch (ex) {
+        if (ex.status === 401) return lostToken();
+        err.textContent = ex.message;
+        go.disabled = false;
+      }
+    },
+  },
+  h('h1', 'Your life as a ', h('span', animalOf())),
+  h('p.lede', 'Where would you live? What would you do all day? Who would you annoy?'),
+  h('div.field', h('label', { for: 'lf' }, 'In your words'), ta),
+  err, go,
+  me.life ? h('button.ghost', { type: 'button', onclick: () => showStory() }, 'Keep it as it was') : null);
   screen(bar(), form);
 }
 
@@ -135,8 +245,7 @@ async function loadPeople() {
   } catch { /* keep what we had */ }
 }
 
-function showDrop({ justJoined = false } = {}) {
-  if (!draft.wish && me?.need) draft.wish = me.need;
+function showDrop() {
   const err = h('p.err', { role: 'alert' });
   const body = h('div.drop-body');
   const go = h('button.go', { type: 'submit' });
@@ -157,12 +266,12 @@ function showDrop({ justJoined = false } = {}) {
   const refresh = () => { go.disabled = !canSend(); };
 
   function renderBody() {
-    go.textContent = draft.mode === 'secret' ? 'Send to the cloud' : (me?.need ? 'Update my lantern' : 'Light my lantern');
+    go.textContent = draft.mode === 'secret' ? 'Send to the cloud' : 'Send up a lantern';
     if (draft.mode === 'wish') {
       const ta = h('textarea.ta#wx', { maxlength: 140, placeholder: '…a tennis partner who won’t go easy', value: draft.wish, oninput: (e) => { draft.wish = e.target.value; refresh(); } });
       body.replaceChildren(
-        h('label', { for: 'wx' }, 'What do you need in life?'), ta,
-        h('p.help', 'It rises as a lantern with your name on it, so people can help. You have one lantern: sending again updates it.'),
+        h('label', { for: 'wx' }, 'What do you need in life right now?'), ta,
+        h('p.help', 'It rises as a lantern with your name on it, so people can help. Send as many as you like: every wish is its own lantern.'),
       );
       refresh();
       return;
@@ -202,8 +311,10 @@ function showDrop({ justJoined = false } = {}) {
       go.disabled = true;
       try {
         if (draft.mode === 'wish') {
-          me = await api('PUT', '/api/me', { need: draft.wish }, auth());
-          showSent({ mode: 'wish', text: me.need });
+          const r = await api('POST', '/api/wishes', { text: draft.wish }, auth());
+          me = r.me;
+          draft.wish = '';
+          showSent({ mode: 'wish', text: r.wish.text });
         } else {
           const about = draft.who === 'me' ? 'me' : draft.pick;
           const forName = draft.who === 'me' ? null : people.find((p) => p.id === draft.pick)?.name;
@@ -220,8 +331,8 @@ function showDrop({ justJoined = false } = {}) {
       }
     },
   },
-  justJoined ? h('div.tick', { role: 'status' }, me.lat != null ? `You’re on the map over ${me.outcode}. Look at the screen!` : 'You’re in! Look at the screen.') : null,
-  seg, body, err, go);
+  seg, body, err, go,
+  h('button.ghost', { type: 'button', onclick: () => showStory() }, `My life as a ${animalOf()}`));
 
   renderSeg();
   renderBody();
@@ -231,6 +342,8 @@ function showDrop({ justJoined = false } = {}) {
 
 function showSent({ mode, text, forName }) {
   const secret = mode === 'secret';
+  // Something about themselves can go into their story.
+  const weave = (!secret || !forName) && me?.storiesOn && me.tellsLeft > 0;
   screen(
     bar(),
     h('div.sent',
@@ -240,8 +353,9 @@ function showSent({ mode, text, forName }) {
         ? (forName ? `Nobody will know it came from you. On the map it’s tied to ${forName}.` : 'Nobody will know it came from you. On the map it floats with your animal.')
         : 'Watch the screen. If someone can help, they’ll come and find you.'),
     ),
-    h('button.go', { type: 'button', onclick: () => { draft.mode = 'secret'; showDrop(); } }, 'Drop another secret'),
-    h('button.ghost', { type: 'button', onclick: () => { draft.mode = secret ? 'wish' : 'secret'; showDrop(); } }, secret ? (me?.need ? 'Change my wish' : 'Light a lantern') : 'Drop a secret instead'),
+    h('button.go', { type: 'button', onclick: () => { draft.mode = mode; showDrop(); } }, secret ? 'Drop another secret' : 'Send another lantern'),
+    h('button.ghost', { type: 'button', onclick: () => { draft.mode = secret ? 'wish' : 'secret'; showDrop(); } }, secret ? 'Send up a lantern' : 'Drop a secret instead'),
+    weave ? h('button.ghost', { type: 'button', onclick: retell }, 'Weave this into my story') : null,
   );
 }
 
@@ -263,7 +377,7 @@ api('GET', '/api/settings')
 function boot() {
   if (!token) return showJoin();
   api('GET', '/api/me', undefined, auth())
-    .then((g) => { me = g; showDrop(); })
+    .then((g) => { me = g; if (me.life) showDrop(); else showLife(); })
     .catch((e) => {
       if (e.status === 401) return lostToken();
       screen(bar(), h('p.lede', 'Can’t reach the party server. Trying again…'));

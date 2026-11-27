@@ -8,6 +8,7 @@ import { sticker } from './sticker.js';
 
 let guests = [];
 let secrets = [];
+let wishes = [];
 let confirmingId = null;
 let confirmingSecret = null;
 const dialog = $('#edit-dialog');
@@ -17,7 +18,7 @@ const badge = (avatar) =>
 
 // ------------------------------------------------------------------ guests
 async function loadGuests() {
-  [guests, secrets] = await Promise.all([api('GET', '/api/admin/guests'), api('GET', '/api/admin/secrets')]);
+  [guests, secrets, wishes] = await Promise.all([api('GET', '/api/admin/guests'), api('GET', '/api/admin/secrets'), api('GET', '/api/wishes')]);
   renderGuests();
   renderSecrets();
 }
@@ -34,7 +35,7 @@ function renderGuests() {
   const q = $('#filter').value.trim().toLowerCase();
   const shown = [...guests]
     .reverse()
-    .filter((g) => !q || [g.name, g.need, g.postcode, g.area, g.avatar.animal].some((v) => v && v.toLowerCase().includes(q)));
+    .filter((g) => !q || [g.name, g.need, g.life, g.story, g.postcode, g.area, g.avatar.animal].some((v) => v && v.toLowerCase().includes(q)));
   const counts = new Map();
   for (const s of secrets) counts.set(s.aboutId, (counts.get(s.aboutId) || 0) + 1);
   $('#guest-count').textContent = guests.length;
@@ -43,8 +44,14 @@ function renderGuests() {
     ...shown.map((g) =>
       h('tr', { dataset: { id: g.id } },
         h('td', badge(g.avatar)),
-        h('td.ad-name', g.name, h('small.ad-about', `the ${g.avatar.animal}`)),
-        h('td.ad-need', g.need || h('span.ad-dim', '—')),
+        h('td.ad-name', g.name, h('small.ad-about', `the ${animalLabel(g.avatar.animal).toLowerCase()}`)),
+        h('td.ad-story',
+          g.story ? h('span', { title: g.story }, g.story) : h('span.ad-dim', g.life ? `“${g.life}”` : '—'),
+          h('small', g.story ? 'story' : g.life ? 'their words, no story yet' : '')),
+        h('td.ad-need', g.need || h('span.ad-dim', '—'), (() => {
+          const n = wishes.filter((w) => w.guestId === g.id).length;
+          return n > 1 ? h('small', `+${n - 1} more lantern${n > 2 ? 's' : ''}`) : null;
+        })()),
         h('td.ad-loc',
           g.postcode ? h('span', g.postcode) : h('span.ad-dim', '—'),
           g.postcode ? h('small', g.area || 'not on map') : null),
@@ -88,7 +95,8 @@ function edit(g) {
       const f = e.target;
       try {
         await api('PUT', `/api/admin/guests/${g.id}`, {
-          name: f.name.value, postcode: f.postcode.value, need: f.need.value,
+          name: f.name.value, postcode: f.postcode.value,
+          life: f.life.value, story: f.story.value,
           avatar: { animal: f.animal.value, color: f.color.value },
         });
         dialog.close();
@@ -103,13 +111,52 @@ function edit(g) {
     h('label', 'Animal', select('animal', ANIMALS, g.avatar.animal, animalLabel)),
     h('label', 'Colour', select('color', COLORS, g.avatar.color, (c) => c))),
   h('label', 'Postcode', h('input', { type: 'text', name: 'postcode', maxlength: 10, value: g.postcode || '' })),
-  h('label', 'Wish', h('input', { type: 'text', name: 'need', maxlength: 140, value: g.need || '' })),
+  wishList(g),
+  h('label', 'Life as their animal (their words)', h('textarea', { name: 'life', maxlength: 280, rows: 3 }, g.life || '')),
+  h('label', 'Story (shown on the big screen; clear it to hide)', h('textarea', { name: 'story', maxlength: 1200, rows: 7 }, g.story || '')),
   h('div.ad-form-foot',
     h('button.ad-btn.primary', { type: 'submit' }, 'Save changes'),
+    h('button.ad-btn', {
+      type: 'button',
+      title: 'Ask the storyteller for a new story from what they shared',
+      onclick: async () => {
+        try {
+          await api('POST', `/api/admin/guests/${g.id}/story`);
+          dialog.close();
+        } catch (err) {
+          status.textContent = err.message;
+          status.className = 'ad-status err';
+        }
+      },
+    }, 'Retell'),
     h('button.ad-btn', { type: 'button', onclick: () => dialog.close() }, 'Cancel'),
     status));
   $('#edit-body').replaceChildren(form);
   dialog.showModal();
+}
+
+// Their lanterns, each deletable on its own (no editing: they're the guest's words).
+function wishList(g) {
+  const box = h('div.ad-wishes');
+  const render = () => {
+    const mine = wishes.filter((w) => w.guestId === g.id);
+    box.replaceChildren(
+      h('span.ad-label', `Lanterns (${mine.length})`),
+      ...(mine.length
+        ? mine.map((w) => h('div.ad-wish', h('span', w.text),
+          h('button.ad-btn.danger-ghost', {
+            type: 'button',
+            onclick: async () => {
+              try { await api('DELETE', `/api/admin/wishes/${w.id}`); } catch (e) { if (e.status !== 404) return alertInline(e.message); }
+              wishes = wishes.filter((x) => x.id !== w.id);
+              render();
+            },
+          }, 'Delete')))
+        : [h('span.ad-dim', 'No wishes yet')]),
+    );
+  };
+  render();
+  return box;
 }
 
 // ----------------------------------------------------------------- secrets
@@ -233,6 +280,7 @@ await boot();
 live({
   guests: () => { if (!dialog.open) loadGuests(); },
   secrets: () => { if (!dialog.open) loadGuests(); },
+  wishes: () => { if (!dialog.open) loadGuests(); },
   settings: fillSettings,
   onResync: boot,
 });

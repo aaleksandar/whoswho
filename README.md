@@ -3,13 +3,21 @@
 A guest board for parties and meetups, hosted on your laptop and reachable from every device on the local network.
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
-  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from animal to animal, and a card shows the secrets tied to each person.
+  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from animal to animal, and a card shows each person's story and the secrets tied to them.
   - **The Cloud:** every secret is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, and *Arrange the sky* switches between **Drift**, **By vibe** and **By voice** (in their own words vs. overheard by friends).
-  - **Wishes:** "what do you need in life?" Every wish rises as a lantern over the night skyline, with the guest's name, so people who can help go and say hi.
-- **`/hi`** is for phones. Join with a name, a postcode and a spirit animal (22 to pick from), then drop as many **secrets** (about yourself or about someone here) and a **wish** as you like.
-- **`/hax0r`** is the admin page: edit or delete guests, read and delete secrets (it shows who sent what), change display settings, reset the event.
+  - **Wishes:** "what do you need in life right now?" Every wish rises as its own lantern over the night skyline, with the guest's name, so people who can help go and say hi. Guests can send as many as they like, and the lanterns keep rising on a loop.
+- **`/hi`** is for phones. Join with a name, a postcode, a spirit animal (66 to pick from) and a few lines on **what your life would look like as that animal**. The storyteller (Claude) spins that into a short, unpredictable story that shows on your phone and on your animal's card on the Map. Then drop as many **secrets** (about yourself or about someone here) and **wishes** as you like, and *weave them into your story* for a retelling.
+- **`/hax0r`** is the admin page: edit or delete guests, read, edit, clear or retell their stories, delete individual lanterns, read and delete secrets (it shows who sent what), change display settings, reset the event.
 
 Everything is stored in a single SQLite file, so a restart loses nothing. New guests, secrets and wishes reach the display instantly via Server-Sent Events, and the display jumps to show them: the Map flies to a new animal, the Cloud spotlights a new secret, a new lantern rises from the rooftops. To stop it jumping around, it makes at most one jump every 25 seconds.
+
+### Stories
+
+When a guest joins, the server asks Claude (`claude-opus-5-5`, set `STORY_MODEL` to change it) for a 60–90-word story. The story starts from what they wrote, follows it somewhere surprising, and works in a random wildcard ingredient so no two tellings rhyme. A retelling also uses their wishes and the secrets they posted about themselves. Secrets friends posted about them are never used. The story takes a few seconds. The phone shows "the storyteller is writing", and the display flies to the guest's card when the story lands.
+
+Each phone gets 5 tellings (the first one plus 4 retellings); the admin page can always ask for another. If the model declines, the API retries on a fallback model; if that also fails, the guest's own words stay on their card.
+
+This needs an Anthropic API key: put `ANTHROPIC_API_KEY=…` in `.env`. Without one everything else works, and cards show the guest's own words instead of a story. The startup banner says whether the storyteller is on.
 
 ### The weather of secrets
 
@@ -78,6 +86,9 @@ Settings come from environment variables, or from a `.env` file in the project f
 | `ADMIN_PASSWORD` | *(unset)*          | Puts `/hax0r` and the admin API behind HTTP Basic auth (any username)                        |
 | `PUBLIC_HOST`    | *(auto)*           | Overrides the auto-detected LAN IP used in the QR code (e.g. if a VPN interface gets picked) |
 | `PUBLIC_URL`     | *(auto)*           | Full public address for the QR code (e.g. a tunnel); pages opened through a tunnel detect it |
+| `ANTHROPIC_API_KEY` | *(unset)*       | Turns on the storyteller (see [Stories](#stories))                                            |
+| `STORY_MODEL`    | `claude-opus-5-5`  | Claude model that tells the stories                                                          |
+| `STORIES`        | *(on)*             | `off` turns the storyteller off even with a key set                                          |
 
 Set the event title, the seconds each view stays on screen, and which views are in rotation from `/hax0r`. Changes apply to the display live.
 
@@ -93,12 +104,13 @@ The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks 
 
 - **Location:** guests are placed at the **district** level only, e.g. `E8` (Hackney), with a small fixed offset so people don't stack. A full postcode is accepted but never shown. The public API (`/api/guests`) returns only the district; only the admin page sees what was typed.
 - **Secrets are anonymous.** The display and the public API (`/api/secrets`) never include who sent a secret. The server stores the author only so the host can moderate from `/hax0r`. The Cloud shows no names at all; the Map shows a secret on the card of the person it is *about*.
-- **Phones:** joining returns a random token that the phone keeps in `localStorage`; it's how the phone posts secrets and sets its wish. Resetting the event logs every phone out.
+- **Phones:** joining returns a random token that the phone keeps in `localStorage`; it's how the phone posts secrets and wishes. Resetting the event logs every phone out.
+- **Stories:** "life as an animal" answers and stories are public: they show on the big screen with the guest's name. To write a story, the server sends Anthropic the guest's first name, animal, district, answer, wish and self-written secrets. It sends nothing else: no full postcode, no secrets from friends, no other guests. Hosts can edit or clear any story from `/hax0r`.
 - **Rendering:** all guest text is rendered as text, never HTML.
 
 ## Offline / internet
 
-Everything works without internet: pages, three.js, fonts (Unbounded, Figtree, Instrument Serif and Caveat, all OFL), the postcode lookup (a bundled table of ~360 districts inside the M25) and the 3D London geometry all ship with the app.
+Everything works without internet except the storyteller, which needs to reach the Anthropic API. Offline, cards show guests' own words instead. The rest works with no connection: pages, three.js, fonts (Unbounded, Figtree, Instrument Serif and Caveat, all OFL), the postcode lookup (a bundled table of ~360 districts inside the M25) and the 3D London geometry all ship with the app.
 
 The display uses WebGL, so run it on a laptop with a reasonable GPU; any recent Mac is fine.
 

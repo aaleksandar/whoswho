@@ -241,6 +241,20 @@ body.home.idle * { cursor: none !important; }
 .mz-fact { margin: 0; padding: 16px 0; border-top: 1.5px dashed #D9C6AA; }
 .mz-fact q { display: block; font: italic 400 34px/1.08 var(--serif); quotes: none; }
 .mz-fact.empty q { color: var(--brown); font-size: 28px; }
+.mz-card.has-story, .mz-card.has-life { left: 1010px; top: 150px; width: 870px; padding: 40px 48px 34px; }
+.mz-card.has-story h2, .mz-card.has-life h2 { font-size: 88px; }
+.mz-card.has-story .mz-fact q { font-size: 28px; }
+.mz-story {
+  max-height: 520px;
+  overflow: hidden;
+  padding: 6px 0 14px;
+  -webkit-mask-image: linear-gradient(180deg, #000 90%, transparent);
+  mask-image: linear-gradient(180deg, #000 90%, transparent);
+}
+.mz-story p { margin: 0 0 14px; font: 400 36px/1.2 var(--serif); color: var(--ink); }
+.mz-story p:first-child::first-letter { float: left; margin: 6px 10px 0 0; font: 700 92px/0.8 var(--hand); color: #E2557F; }
+.mz-fact.life { padding: 18px 0 22px; }
+.mz-fact.life q { font-size: 52px; line-height: 1.05; }
 .mz-fact small { display: block; margin-top: 8px; font: 700 13px var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--brown); }
 .mz-top {
   position: absolute;
@@ -479,7 +493,7 @@ body.home.idle * { cursor: none !important; }
   color: #FFD9B8;
 }
 .wi-sky { position: absolute; left: 0; right: 0; bottom: 0; width: 1920px; height: 300px; }
-.wi-top { position: absolute; left: 0; right: 0; top: 56px; text-align: center; pointer-events: none; }
+.wi-top { position: absolute; z-index: 150; left: 0; right: 0; top: 56px; text-align: center; pointer-events: none; text-shadow: 0 2px 24px #120B30, 0 0 8px #120B30; }
 .wi-top h1 { margin: 0; font: 800 64px/1 var(--display); letter-spacing: -0.05em; }
 .wi-top p { margin: 16px 0 0; font: 600 22px var(--body); color: #E9CFE6; }
 

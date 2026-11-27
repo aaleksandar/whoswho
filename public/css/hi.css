@@ -221,3 +221,39 @@ label { display: block; margin: 0 0 8px; font: 700 13px var(--body); letter-spac
 }
 .sent h2 { margin: 36px 0 8px; font: 800 30px/1.05 var(--display); letter-spacing: -0.04em; text-align: center; }
 .sent p { margin: 0 auto 28px; max-width: 300px; text-align: center; font: 500 16px/1.4 var(--body); color: var(--lilac); }
+
+/* More animals than fit on a phone screen: the grid scrolls on its own */
+.zoo {
+  max-height: 292px;
+  overflow-y: auto;
+  padding: 2px 2px 8px;
+  -webkit-mask-image: linear-gradient(180deg, #000 90%, transparent);
+  mask-image: linear-gradient(180deg, #000 90%, transparent);
+  overscroll-behavior: contain;
+}
+
+/* Life as an animal, and the story told from it */
+.ta.life { height: auto; min-height: 132px; font-size: 24px; line-height: 1.15; }
+.story {
+  margin: 6px 0 14px;
+  padding: 22px 22px 20px;
+  border-radius: 22px;
+  background: #F5F1FF;
+  color: #14112E;
+  box-shadow: 0 24px 60px rgba(255, 122, 168, 0.18);
+  animation: rise 0.5s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+article.story p { margin: 0 0 12px; font: 400 24px/1.28 var(--serif); }
+article.story p:last-child { margin-bottom: 0; }
+article.story p:first-child::first-letter { float: left; margin: 5px 8px 0 0; font: 800 52px/0.8 var(--display); color: #E2557F; }
+.story .yours { margin: 0; }
+.story .yours q { font: italic 400 22px/1.25 var(--serif); quotes: '“' '”'; color: #4A4370; }
+.story small { display: block; margin-top: 10px; font: 700 12px var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: #7F77B8; }
+.story.writing .yours { margin-top: 14px; padding-top: 14px; border-top: 1.5px dashed #CFC7EE; }
+.quill { display: flex; align-items: center; gap: 10px; margin: 0; font: 800 17px var(--display); letter-spacing: -0.02em; color: #E2557F; }
+.dots { display: inline-flex; gap: 4px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: dot 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .dots i, .story { animation: none; } }

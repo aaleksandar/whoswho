@@ -17,7 +17,7 @@ export async function api(method, url, body, headers = {}) {
   return data;
 }
 
-const EVENTS = ['guests', 'secrets', 'settings'];
+const EVENTS = ['guests', 'secrets', 'wishes', 'settings'];
 const SSE_GRACE_MS = 6000; // no "hello" by then: the stream is being buffered
 const POLL_MS = 2500;
 

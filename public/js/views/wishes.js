@@ -1,5 +1,6 @@
-// Wishes: "what do you need in life?" Every guest's wish rises as a lantern
-// over the night skyline, with their name, so people who can help go and say hi.
+// Wishes: "what do you need in life right now?" Every wish rises as a lantern
+// over the night skyline, with the guest's name, so people who can help go and
+// say hi. Guests can send as many as they like; the sky never runs out.
 
 import { h } from '../dom.js';
 
@@ -9,7 +10,8 @@ const SKYLINE = `<svg class="wi-sky" viewBox="0 0 1920 300" preserveAspectRatio=
 <path fill="#2A1C55" d="M1662 246l18-86 18 86z"/>
 <path fill="#120B30" d="M0 300v-44c180 10 340-8 520 0s360 18 560 6 380-14 560-4 200 8 280 0V300Z"/>
 </svg>`;
-const SPAN = 1500;
+const MIN_SPAN = 1500;
+const GAP = 70; // vertical room per lantern, so a full sky doesn't pile up
 
 export function createWishesView(root) {
   const layer = h('div', { 'aria-label': 'What guests need in life' });
@@ -17,10 +19,11 @@ export function createWishesView(root) {
     h('div.wi-stars', { 'aria-hidden': 'true' }),
     layer,
     h('div', { html: SKYLINE }),
-    h('header.wi-top', h('h1', 'What do you need in life?'), h('p', 'Every lantern is somebody here. If you can help, go and say hi.')),
+    h('header.wi-top', h('h1', 'What do you need in life right now?'), h('p', 'Every lantern is somebody here. If you can help, go and say hi.')),
   );
 
-  let lanterns = []; // {id, el, x, off, ph, zp, sp, glow}
+  let lanterns = []; // {id, el, x, off, ph, zp, sp, glow}, one per wish
+  let SPAN = MIN_SPAN;
   let raf = 0;
   let T = 0;
   let last = 0;
@@ -33,19 +36,22 @@ export function createWishesView(root) {
     return s / 2147483647;
   };
 
-  function update({ guests }) {
-    const wished = guests.filter((g) => g.need);
-    const n = Math.max(1, wished.length);
+  function update({ guests, wishes = [] }) {
+    const byId = new Map(guests.map((g) => [g.id, g]));
+    const lit = wishes.filter((w) => byId.has(w.guestId));
+    const n = Math.max(1, lit.length);
+    SPAN = Math.max(MIN_SPAN, n * GAP);
     const old = new Map(lanterns.map((l) => [l.id, l]));
-    lanterns = wished.map((g, i) => {
-      const prev = old.get(g.id);
+    lanterns = lit.map((w, i) => {
+      const g = byId.get(w.guestId);
+      const prev = old.get(w.id);
       const el = h('div.wi-ln', h('div.wi-lamp', { 'aria-hidden': 'true' }, h('i')),
-        h('div.wi-tx', h('q', g.need), h('span', [g.name, g.area].filter(Boolean).join(' · '))));
+        h('div.wi-tx', h('q', w.text), h('span', [g.name, g.area].filter(Boolean).join(' · '))));
       return {
-        id: g.id, el,
+        id: w.id, el,
         x: 170 + ((i * 0.618034) % 1) * 1580,
-        off: prev ? prev.off : (i / n) * SPAN + seeded(g.id, 1) * 120,
-        ph: seeded(g.id, 2) * 6.28, zp: seeded(g.id, 3) * 6.28, sp: 0.8 + seeded(g.id, 4) * 0.5,
+        off: prev ? prev.off : (i / n) * SPAN + seeded(w.id, 1) * 120,
+        ph: seeded(w.id, 2) * 6.28, zp: seeded(w.id, 3) * 6.28, sp: 0.8 + seeded(w.id, 4) * 0.5,
         glow: prev?.glow || 0,
       };
     });
@@ -53,8 +59,8 @@ export function createWishesView(root) {
   }
 
   /** A new wish: launch its lantern from the rooftops, up front and glowing. */
-  function highlight(guestId) {
-    const l = lanterns.find((x) => x.id === guestId);
+  function highlight(wishId) {
+    const l = lanterns.find((x) => x.id === wishId);
     if (!l) return;
     l.zp = Math.PI / 2 - T * 0.06; // close to the viewer (z = 1)…
     const speed = 34 * l.sp * (0.55 + 0.6);
@@ -87,7 +93,7 @@ export function createWishesView(root) {
   }
 
   return {
-    hasData: ({ guests }) => guests.some((g) => g.need),
+    hasData: ({ wishes = [] }) => wishes.length > 0,
     update,
     highlight,
     show() {
