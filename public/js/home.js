@@ -136,6 +136,9 @@ function toast(...children) {
 // ------------------------------------------------------------------- data
 // /home?view=cloud starts on that view (handy for testing, or to open on it).
 let startView = new URLSearchParams(location.search).get('view');
+// No view is picked until the guests have loaded: otherwise a party that's
+// already going flashes the "waiting for the first guest" splash on load.
+let loaded = false;
 
 function pushState() {
   for (const v of Object.values(views)) v.update(state);
@@ -148,6 +151,7 @@ function pushState() {
 async function loadAll() {
   const [guests, secrets, wishes] = await Promise.all([api('GET', '/api/guests'), api('GET', '/api/secrets'), api('GET', '/api/wishes')]);
   state = { guests, secrets, wishes };
+  loaded = true;
   pushState();
 }
 
@@ -198,6 +202,7 @@ function applySettings(s) {
   document.title = s.title;
   $('#splash-title').textContent = s.title;
   views.map?.setTitle(s.title);
+  if (!loaded) return; // the first view is picked once the data is in (pushState)
   if (viewsChanged || !settings.views.includes(current)) step(1);
   else if (timingChanged && views[current]) activate(current);
   else renderTabs();

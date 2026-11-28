@@ -87,6 +87,9 @@ body.home.idle * { cursor: none !important; }
 [data-view='wishes'] .tab { color: #E9CFE6; border-radius: 999px; }
 [data-view='wishes'] .tab.on { background: #FFF4E6; color: #14112E; }
 [data-view='splash'] .tabs { display: none; }
+/* while the page loads (no view picked yet): nothing but the paper */
+body.home:not([data-view]) .tabs,
+body.home:not([data-view]) .qr-corner { visibility: hidden; }
 
 .qr-corner {
   position: absolute;
