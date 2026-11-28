@@ -14,13 +14,18 @@ const MIN_SPAN = 1500;
 const RISE = 14; // px per second at the stage's scale: a slow, drifting climb
 const GAP = 70; // vertical room per lantern, so a full sky doesn't pile up
 
-export function createWishesView(root) {
+// Drag the sky up to hurry the lanterns along (down sends them back); a
+// flick keeps them racing for a moment, then they settle to their slow drift.
+const MAX_BOOST = 40; // × normal speed
+
+export function createWishesView(root, { onInteract } = {}) {
   const layer = h('div', { 'aria-label': 'What guests need in life' });
   root.append(
     h('div.wi-stars', { 'aria-hidden': 'true' }),
     layer,
     h('div', { html: SKYLINE }),
     h('header.wi-top', h('h1', 'What do you need in life right now?'), h('p', 'Every lantern is somebody here. If you can help, go and say hi.')),
+    h('p.wi-hint', 'Drag the sky up or down to hurry the lanterns along'),
   );
 
   let lanterns = []; // {id, el, x, off, ph, zp, sp, glow}, one per wish
@@ -28,6 +33,45 @@ export function createWishesView(root) {
   let raf = 0;
   let T = 0;
   let last = 0;
+  let P = 0; // how far the lanterns have risen, in seconds of normal drift
+  let boost = 0; // extra speed from a flick, fading away
+  let grab = null;
+
+  const kx = () => 1080 / (root.getBoundingClientRect().height || 1080);
+  root.addEventListener('pointerdown', (e) => {
+    if (grab) return;
+    grab = { id: e.pointerId, y: e.clientY, t: performance.now(), v: 0 };
+    boost = 0;
+    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    root.classList.add('grabbing');
+  });
+  root.addEventListener('pointermove', (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    const now = performance.now();
+    const dy = (e.clientY - grab.y) * kx();
+    const dP = -dy / RISE; // the sky follows the hand
+    P += dP;
+    grab.v = grab.v * 0.6 + (dP / Math.max(0.008, (now - grab.t) / 1000)) * 0.4;
+    grab.y = e.clientY;
+    grab.t = now;
+    onInteract?.();
+  });
+  const release = (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    // only a recent movement counts as a flick
+    if (performance.now() - grab.t < 120) boost = Math.max(-MAX_BOOST, Math.min(MAX_BOOST, grab.v - 1));
+    grab = null;
+    root.classList.remove('grabbing');
+  };
+  root.addEventListener('pointerup', release);
+  root.addEventListener('pointercancel', release);
+  root.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    boost = Math.max(-MAX_BOOST, Math.min(MAX_BOOST, boost + d * 0.06));
+    onInteract?.();
+  }, { passive: false });
+  const mod = (a, m) => ((a % m) + m) % m;
 
   // Same golden-ratio spread as the design, seeded per guest so lanterns
   // keep their place when the list changes.
@@ -65,7 +109,7 @@ export function createWishesView(root) {
     if (!l) return;
     l.zp = Math.PI / 2 - T * 0.06; // close to the viewer (z = 1)…
     const speed = RISE * l.sp * (0.55 + 0.6);
-    l.off = ((-T * speed) % SPAN + SPAN) % SPAN; // …and starting at the rooftops
+    l.off = mod(-P * speed, SPAN); // …and starting at the rooftops
     l.glow = 8;
   }
 
@@ -74,10 +118,15 @@ export function createWishesView(root) {
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
     T += dt;
+    if (!grab) {
+      P += dt * (1 + boost);
+      boost *= Math.exp(-dt * 0.7);
+      if (Math.abs(boost) < 0.01) boost = 0;
+    }
     for (const w of lanterns) {
       const z = 0.5 + 0.5 * Math.sin(T * 0.06 + w.zp);
       const sc = 0.42 + 0.68 * z;
-      const y = 1160 - ((T * RISE * w.sp * (0.55 + z * 0.6) + w.off) % SPAN);
+      const y = 1160 - mod(P * RISE * w.sp * (0.55 + z * 0.6) + w.off, SPAN);
       const x = w.x + Math.sin(T * 0.15 + w.ph) * 40 + (w.x - 960) * (z - 0.5) * 0.25;
       const fadeIn = Math.min(1, (1160 - y) / 260);
       const fadeOut = Math.min(1, (y + 340) / 380);

@@ -85,9 +85,13 @@ Set the event title, the seconds each view stays on screen, and which views are 
 
 The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks the same on any TV or projector. Only the view on screen renders; the others sleep.
 
-**The Map:** tap an animal to see its card, or drag to turn London. Either restarts the view's timer.
+Every view can be explored by hand (mouse, trackpad or touch screen). Touching a view restarts its timer, and its own slideshow waits about 15 seconds before carrying on.
 
-**The Cloud:** one fun thing at a time floats to the front for 9 seconds. Tap a cloud to bring it forward; a new one jumps the queue.
+**The Map:** tap an animal to see its card. Drag to turn London (drag up or down to tilt), scroll, pinch or use the `+`/`−` buttons to zoom toward that spot, and move around with two fingers (or right-drag / shift-drag). Left alone for 12 seconds, the camera drifts back to the tour.
+
+**The Cloud:** one fun thing at a time floats to the front for 9 seconds. Grab the card and throw it left for the next one (right for the previous); the cloud moves with it. Tapping the card, a two-finger swipe or the scroll wheel also flips. Tap any cloud in the sky to bring it forward; a new one jumps the queue.
+
+**Wishes:** drag the sky up to send the lanterns higher, or down to bring them back. A flick (or the scroll wheel) keeps them racing for a few seconds before they settle back to their slow drift.
 
 ## Privacy
 

@@ -37,6 +37,7 @@ body.home.idle * { cursor: none !important; }
   opacity: 1;
   transition: opacity 0.8s;
 }
+.view { touch-action: none; } /* the display's own gestures, not the browser's */
 .view canvas {
   position: absolute;
   inset: 0;
@@ -44,6 +45,7 @@ body.home.idle * { cursor: none !important; }
   height: 1080px;
   cursor: grab;
 }
+.view canvas:active { cursor: grabbing; }
 
 /* ---------------------------------------------------------------- chrome */
 .progress {
@@ -275,6 +277,27 @@ body.home.idle * { cursor: none !important; }
   pointer-events: none;
 }
 
+.mz-zoom {
+  position: absolute;
+  z-index: 4;
+  left: 40px;
+  top: 470px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mz-zoom button {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  background: var(--paper);
+  box-shadow: 0 8px 20px rgba(60, 35, 15, 0.15);
+  font: 800 40px/1 var(--display);
+  color: var(--ink);
+  cursor: pointer;
+}
+.mz-zoom button:active { transform: translateY(2px); }
+
 /* ---------------------------------------------------------------- Cloud */
 .view-cloud { transition: opacity 0.8s, visibility 0s 0.8s, background 1.2s; }
 .view-cloud.active { transition: opacity 0.8s, background 1.2s; }
@@ -317,9 +340,24 @@ body.home.idle * { cursor: none !important; }
   text-align: center;
   transform: rotate(-0.8deg);
   transition: opacity 0.5s, transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
+  cursor: grab;
+}
+.cw-spot:active { cursor: grabbing; }
+.cw-hint {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 10px 18px;
+  background: rgba(255, 253, 248, 0.85);
+  font: 700 26px/1 var(--hand);
+  color: #6B4E3A;
+  white-space: nowrap;
   pointer-events: none;
 }
-.cw-spot.off { opacity: 0; transform: rotate(2deg) translateY(30px); transition: none; }
+.cw-spot.off { opacity: 0; transform: rotate(2deg) translateY(30px); transition: none; pointer-events: none; }
 .cw-spot q { display: block; font: italic 400 84px/1.02 var(--serif); quotes: none; text-wrap: balance; }
 .cw-spot[data-len='mid'] q { font-size: 70px; }
 .cw-spot[data-len='long'] q { font-size: 56px; line-height: 1.06; }
@@ -441,6 +479,21 @@ body.home.idle * { cursor: none !important; }
   font: 700 15px var(--body);
   letter-spacing: 0.06em;
   color: #FFD9B8;
+}
+.view-wishes { cursor: grab; }
+.view-wishes.grabbing { cursor: grabbing; }
+.wi-hint {
+  position: absolute;
+  z-index: 150;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  margin: 0;
+  font: 600 22px var(--body);
+  color: #E9CFE6;
+  opacity: 0.8;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .wi-sky { position: absolute; left: 0; right: 0; bottom: 0; width: 1920px; height: 300px; }
 .wi-top { position: absolute; z-index: 150; left: 0; right: 0; top: 56px; text-align: center; pointer-events: none; text-shadow: 0 2px 24px #120B30, 0 0 8px #120B30; }

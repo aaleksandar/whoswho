@@ -8,6 +8,7 @@ import { VIBES, groups, forecast, dominant } from '../weather.js';
 const MAX_CLOUDS = 35; // in the sky at once; older ones still count in the legend
 const FOCUS_MS = 9000; // each fun thing's turn at the front
 const HOLD_MS = 15000; // after someone taps a cloud, or a new one arrives
+const FLIP_PX = 170; // drag the card this far (stage px), or fling it, to flip
 
 export function createCloudView(root, { geo, onInteract }) {
   const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches its words' });
@@ -15,11 +16,12 @@ export function createCloudView(root, { geo, onInteract }) {
   const spotQ = h('q');
   const spotChip = h('span');
   const spot = h('section.cw-spot.off', { 'aria-live': 'polite' }, spotQ, h('p', '— someone in this room ', spotChip));
+  const hint = h('p.cw-hint', 'Swipe the card for the next one · tap any cloud to read it');
   const forecastEl = h('p');
   const chips = h('div.cw-chips');
   const countEl = h('b', '0');
   root.append(
-    canvas, toast, spot,
+    canvas, toast, spot, hint,
     h('header.cw-top',
       h('div.paper-plate.cw-plate', h('h1', 'The Cloud'), forecastEl, chips),
       h('div.mz-stats',
@@ -44,7 +46,6 @@ export function createCloudView(root, { geo, onInteract }) {
       groups,
       boroughs: geo.boroughs,
       getSpot: () => spotId,
-      onPick: (id) => { if (id) { touched = Date.now(); focus(id); onInteract?.(); } },
     });
     render();
     engine.snap();
@@ -62,19 +63,113 @@ export function createCloudView(root, { geo, onInteract }) {
     spotChip.style.background = v.cloud;
   }
 
-  function focus(id) {
+  // from: -1/1 slides the card in from that side (a flip); otherwise it drops in
+  function focus(id, from = 0) {
     spotId = id;
+    spot.style.transition = 'none';
+    spot.style.opacity = '';
+    if (from) {
+      spot.style.transform = `translateX(${from * 900}px) rotate(${from * 4}deg)`;
+      engine?.setNudge(from * 700, false, true);
+      void spot.offsetWidth;
+      spot.style.transition = '';
+      spot.style.transform = '';
+      renderSpot();
+      return;
+    }
+    spot.style.transform = '';
     // replay the card's entrance so each turn reads as new
     spot.classList.add('off');
     void spot.offsetWidth;
+    spot.style.transition = '';
     renderSpot();
+  }
+
+  function neighbour(dir) {
+    const i = clouds.findIndex((c) => c.id === spotId);
+    return clouds[((i < 0 ? 0 : i + dir) % clouds.length + clouds.length) % clouds.length].id;
   }
 
   function next() {
     if (!clouds.length) return focus(null);
-    const i = clouds.findIndex((c) => c.id === spotId);
-    focus(clouds[(i + 1) % clouds.length].id);
+    focus(neighbour(1));
   }
+
+  // dir 1 = next (card thrown to the left), -1 = previous
+  function flip(dir) {
+    if (clouds.length < 2) return settle();
+    touched = Date.now();
+    onInteract?.();
+    const to = neighbour(dir);
+    spot.style.transition = 'transform 0.22s ease-in, opacity 0.22s';
+    spot.style.transform = `translateX(${-dir * 1400}px) rotate(${-dir * 10}deg)`;
+    spot.style.opacity = '0';
+    clearTimeout(flipT);
+    flipT = setTimeout(() => focus(to, dir), 200);
+  }
+
+  function settle() {
+    spot.style.transition = '';
+    spot.style.transform = '';
+    engine?.setNudge(0, false);
+  }
+
+  // ----------------------------------------------------------- gestures
+  // Grab the card (or anywhere in the sky) and drag it sideways to flip;
+  // tap a cloud to bring it to the front.
+  let grab = null;
+  let flipT;
+  let wheelAcc = 0;
+  let wheelAt = 0;
+  const k = () => 1920 / (root.getBoundingClientRect().width || 1920);
+  root.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || grab) return;
+    grab = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: 0, t: performance.now(), vx: 0, onCard: spot.contains(e.target) };
+    touched = Date.now(); // a hand on the sky holds the slideshow
+    try { root.setPointerCapture(e.pointerId); } catch { /* fine */ }
+  });
+  root.addEventListener('pointermove', (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    const now = performance.now();
+    const dx = (e.clientX - grab.x) * k();
+    grab.vx = (dx - grab.dx) / Math.max(1, now - grab.t);
+    grab.t = now;
+    grab.dx = dx;
+    grab.moved = Math.max(grab.moved, Math.abs(dx), Math.abs(e.clientY - grab.y) * k());
+    if (grab.moved < 8 || !spotId) return;
+    spot.style.transition = 'none';
+    spot.style.transform = `translateX(${dx}px) rotate(${-0.8 + dx * 0.012}deg)`;
+    engine?.setNudge(dx, true);
+  });
+  const release = (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    const g = grab;
+    grab = null;
+    if (g.moved < 8) { // a tap
+      if (e.type === 'pointercancel') return;
+      const id = engine?.pick(e.clientX, e.clientY);
+      touched = Date.now();
+      onInteract?.();
+      if (id && id !== spotId) focus(id);
+      else if (g.onCard) flip(1);
+      return;
+    }
+    touched = Date.now();
+    if (Math.abs(g.dx) > FLIP_PX || (Math.abs(g.dx) > 60 && Math.abs(g.vx) > 0.7)) flip(g.dx < 0 ? 1 : -1);
+    else settle();
+  };
+  root.addEventListener('pointerup', release);
+  root.addEventListener('pointercancel', release);
+  // a trackpad swipe (or mouse wheel) flips too
+  root.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (performance.now() - wheelAt < 700) return;
+    wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(wheelAcc) < 90) return;
+    flip(wheelAcc > 0 ? 1 : -1);
+    wheelAcc = 0;
+    wheelAt = performance.now();
+  }, { passive: false });
 
   function render() {
     const sky = (VIBES[dominant(all)] || VIBES.mist).sky;
@@ -92,7 +187,7 @@ export function createCloudView(root, { geo, onInteract }) {
   }
 
   function tick() {
-    if (Date.now() - touched < HOLD_MS) return;
+    if (grab || Date.now() - touched < HOLD_MS) return;
     next();
   }
 

@@ -148,13 +148,70 @@
 
     var C = o.cam || {}, wide = Object.assign({ tx: 1.5, ty: 0, tz: -0.5, r: 58, phi: 0.82 }, C.wide || {}), fc = Object.assign({ r: 22, phi: 0.95, side: 4.5, lift: 0.4 }, C.focus || {});
     var cv = Object.assign({ th: 0 }, wide);
-    var drag = 0, down = null, touched = 0;
-    var ray = new T.Raycaster(), ndc = new T.Vector2();
+    // Manual camera: drag turns (and tilts) London, wheel or pinch zooms toward
+    // the pointer, two fingers (or right/shift-drag) pan. Left alone, it eases
+    // back to the tour's framing.
+    var drag = 0, touched = 0, man = { zoom: 1, tilt: 0, px: 0, pz: 0 };
+    var ptrs = {}, gesture = null;
+    var ray = new T.Raycaster(), ndc = new T.Vector2(), plane = new T.Plane(new T.Vector3(0, 1, 0), 0), hitP = new T.Vector3();
     var rect = function () { return canvas.getBoundingClientRect(); };
-    var onDown = function (e) { down = { x: e.clientX, d0: drag, moved: 0 }; };
-    var onMove = function (e) { if (!down) return; var k = 1920 / (rect().width || 1920), dx = (e.clientX - down.x) * k; down.moved = Math.max(down.moved, Math.abs(dx)); drag = down.d0 + dx * 0.0035; touched = Date.now(); if (o.onTouch) o.onTouch(); };
+    var scaleK = function () { return 1920 / (rect().width || 1920); };
+    var poke = function () { touched = Date.now(); if (o.onTouch) o.onTouch(); };
+    var groundAt = function (cx, cy) {
+      var b = rect(); ndc.set(((cx - b.left) / b.width) * 2 - 1, -((cy - b.top) / b.height) * 2 + 1);
+      ray.setFromCamera(ndc, cam); return ray.ray.intersectPlane(plane, hitP) ? hitP.clone() : null;
+    };
+    // zoom by f (<1 = closer), keeping the ground under (cx, cy) in place
+    var zoomBy = function (f, cx, cy) {
+      var z0 = man.zoom, z1 = Math.max(0.28, Math.min(2.4, z0 * f));
+      if (cx != null) {
+        var p = groundAt(cx, cy);
+        if (p) { var k = 1 - z1 / z0; man.px += (p.x - ctx.target.x) * k; man.pz += (p.z - ctx.target.z) * k; }
+      }
+      man.zoom = z1; poke();
+    };
+    var panBy = function (dx, dy) { // stage px
+      var s = cv.r * 0.00105, c = Math.cos(cv.th), sn = Math.sin(cv.th);
+      man.px += (-c * dx - sn * dy) * s; man.pz += (sn * dx - c * dy) * s;
+      var lim = 26; man.px = Math.max(-lim, Math.min(lim, man.px)); man.pz = Math.max(-lim, Math.min(lim, man.pz));
+      poke();
+    };
+    var mid = function () { var ks = Object.keys(ptrs), a = ptrs[ks[0]], b = ptrs[ks[1]]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
+    // Gestures are read over the whole view (o.input), so a pinch works even
+    // when a finger lands on a card or a label; only taps on the canvas pick.
+    var inEl = o.input || canvas;
+    var onDown = function (e) {
+      if (e.target.closest && e.target.closest('button, a, input')) return;
+      ptrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try { inEl.setPointerCapture(e.pointerId); } catch (_) {}
+      var n = Object.keys(ptrs).length;
+      if (n === 1) gesture = { kind: e.button === 2 || e.shiftKey ? 'pan' : 'turn', x: e.clientX, y: e.clientY, moved: 0, onMap: e.target === canvas };
+      else if (n === 2) { var m = mid(); gesture = { kind: 'pinch', x: m.x, y: m.y, d: m.d, moved: 99 }; }
+    };
+    var onMove = function (e) {
+      var p = ptrs[e.pointerId]; if (!p || !gesture) return;
+      p.x = e.clientX; p.y = e.clientY;
+      var k = scaleK();
+      if (gesture.kind === 'pinch') {
+        if (Object.keys(ptrs).length < 2) return;
+        var m = mid();
+        zoomBy(gesture.d / m.d, m.x, m.y);
+        panBy((m.x - gesture.x) * k, (m.y - gesture.y) * k);
+        gesture.x = m.x; gesture.y = m.y; gesture.d = m.d;
+        return;
+      }
+      var dx = (e.clientX - gesture.x) * k, dy = (e.clientY - gesture.y) * k;
+      gesture.moved += Math.abs(dx) + Math.abs(dy);
+      gesture.x = e.clientX; gesture.y = e.clientY;
+      if (gesture.moved < 6) return;
+      if (gesture.kind === 'pan') panBy(dx, dy);
+      else { drag += dx * 0.0035; man.tilt = Math.max(-0.5, Math.min(0.45, man.tilt - dy * 0.0015)); poke(); }
+    };
     var onUp = function (e) {
-      if (down && down.moved < 6) {
+      if (!ptrs[e.pointerId]) return;
+      delete ptrs[e.pointerId];
+      var n = Object.keys(ptrs).length;
+      if (gesture && gesture.kind !== 'pinch' && gesture.onMap && gesture.moved < 6 && n === 0 && e.type === 'pointerup') {
         var b = rect(); ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
         ray.setFromCamera(ndc, cam);
         var hit = ray.intersectObjects(pick, true)[0];
@@ -162,11 +219,23 @@
         var idx = -1; if (o2) markers.forEach(function (m, j) { if (m.key === o2.userData.key) idx = j; });
         if (o.onPick) o.onPick(idx);
       }
-      down = null;
+      // lifting one finger of a pinch carries on as a turn with the other
+      if (n === 1) { var q = ptrs[Object.keys(ptrs)[0]]; gesture = { kind: 'turn', x: q.x, y: q.y, moved: 99 }; }
+      else if (n === 0) gesture = null;
     };
-    canvas.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    var onWheel = function (e) {
+      e.preventDefault();
+      var d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      zoomBy(Math.exp(d * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX, e.clientY); // ctrlKey = trackpad pinch
+    };
+    var noMenu = function (e) { e.preventDefault(); };
+    inEl.addEventListener('pointerdown', onDown);
+    inEl.addEventListener('pointermove', onMove);
+    inEl.addEventListener('pointerup', onUp);
+    inEl.addEventListener('pointercancel', onUp);
+    inEl.addEventListener('wheel', onWheel, { passive: false });
+    inEl.addEventListener('contextmenu', noMenu);
+    var RESET_MS = o.resetMs || 12000;
 
     var v = new T.Vector3(), last = performance.now(), raf = 0, running = true;
     var loop = function (now) {
@@ -182,7 +251,16 @@
         var a = markers[f].anchor(v.set(0, 0, 0)).clone();
         want = { tx: a.x + Math.cos(th0) * fc.side, ty: a.y * fc.lift, tz: a.z - Math.sin(th0) * fc.side, r: fc.r, phi: fc.phi, th: th0 };
       } else want = Object.assign({}, wide, { th: th0 });
-      var k = 1 - Math.exp(-dt * 1.6);
+      var idle = Date.now() - touched;
+      if (idle > RESET_MS) { // left alone: drift back to the tour's framing
+        var kr = 1 - Math.exp(-dt * 0.9);
+        man.zoom += (1 - man.zoom) * kr; man.tilt -= man.tilt * kr; man.px -= man.px * kr; man.pz -= man.pz * kr;
+      }
+      want.r = Math.max(3.5, want.r * man.zoom);
+      want.phi = Math.max(0.22, Math.min(1.32, want.phi + man.tilt));
+      want.tx += man.px; want.tz += man.pz;
+      // follow a hand quickly; glide between tour stops
+      var k = 1 - Math.exp(-dt * (idle < 1500 ? 7 : 1.6));
       Object.keys(want).forEach(function (key) { cv[key] += (want[key] - cv[key]) * k; });
       cam.position.set(cv.tx + cv.r * Math.sin(cv.phi) * Math.sin(cv.th), cv.ty + cv.r * Math.cos(cv.phi), cv.tz + cv.r * Math.sin(cv.phi) * Math.cos(cv.th));
       cam.lookAt(cv.tx, cv.ty, cv.tz); ctx.target.set(cv.tx, cv.ty, cv.tz);
@@ -215,15 +293,19 @@
     return {
       setGuests: setGuests,
       touched: function () { return touched; },
+      zoomBy: function (f) { zoomBy(f); },
       // Only the view on screen renders; the others sleep.
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
       dispose: function () {
         running = false;
         cancelAnimationFrame(raf);
-        canvas.removeEventListener('pointerdown', onDown);
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
+        inEl.removeEventListener('pointerdown', onDown);
+        inEl.removeEventListener('pointermove', onMove);
+        inEl.removeEventListener('pointerup', onUp);
+        inEl.removeEventListener('pointercancel', onUp);
+        inEl.removeEventListener('wheel', onWheel);
+        inEl.removeEventListener('contextmenu', noMenu);
         r.dispose(); if (r.forceContextLoss) r.forceContextLoss();
       }
     };

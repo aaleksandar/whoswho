@@ -47,6 +47,7 @@ export function createMapView(root, { geo, onInteract }) {
   const tint = h('div.mz-tint', { 'aria-hidden': 'true' });
   const flashEl = h('div.mz-flash', { 'aria-hidden': 'true' });
   const wxEl = h('p.mz-wx', { 'aria-live': 'polite' });
+  const zoomBtn = (label, f, sym) => h('button', { type: 'button', 'aria-label': label, title: label, onclick: () => map?.zoomBy(f) }, sym);
   root.append(
     canvas, tint, pinsEl, leadSvg, card, flashEl,
     h('header.mz-top',
@@ -55,7 +56,8 @@ export function createMapView(root, { geo, onInteract }) {
         h('div.paper-stat', guestStat, h('span', 'animals in town')),
         h('div.paper-stat', factStat, h('span', 'fun things said'))),
     ),
-    h('p.mz-note', 'Every animal is a guest, hopping on their postcode district. Tap one, or drag to turn London.'),
+    h('div.mz-zoom', zoomBtn('Zoom in', 0.7, '+'), zoomBtn('Zoom out', 1 / 0.7, '−')),
+    h('p.mz-note', 'Every animal is a guest. Tap one · drag to turn · pinch or scroll to zoom · two fingers to move'),
   );
 
   let guests = []; // guests on the map, in marker order
@@ -135,6 +137,7 @@ export function createMapView(root, { geo, onInteract }) {
         life = window.WWLife ? window.WWLife.create(ctx, { onFlash }) : null;
         return { update: (t, dt, f) => { city.update?.(t, dt, f); life?.update(t, dt, f); } };
       },
+      input: root,
       getFocus: () => focus,
       onPick: (i) => { touched = Date.now(); setFocus(i); onInteract?.(); },
       onTouch: () => { touched = Date.now(); onInteract?.(); },

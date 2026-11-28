@@ -130,20 +130,16 @@
       }
     };
 
-    var th = 0, drag = 0, down = null;
+    // The view owns the gestures: it asks what is under a tap (pick), and
+    // drags the cloud in front sideways while someone flips through (nudge).
+    var th = 0, nudge = 0, held = false, nudgeNow = 0;
     var ray = new T.Raycaster(), ndc = new T.Vector2();
-    var rect = function () { return canvas.getBoundingClientRect(); };
-    var onDown = function (e) { down = { x: e.clientX, d0: drag, moved: 0 }; };
-    var onMove = function (e) { if (!down) return; var k = 1920 / (rect().width || 1920), dx = (e.clientX - down.x) * k; down.moved = Math.max(down.moved, Math.abs(dx)); drag = Math.max(-0.6, Math.min(0.6, down.d0 + dx * 0.002)); };
-    var onUp = function (e) {
-      if (down && down.moved < 6 && o.onPick) {
-        var b = rect(); ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1); ray.setFromCamera(ndc, cam);
-        var hit = ray.intersectObjects(Object.keys(objs).map(function (k) { return objs[k].root; }), true)[0], ob = hit && hit.object;
-        while (ob && ob.userData.id == null) ob = ob.parent; o.onPick(ob ? ob.userData.id : null);
-      }
-      down = null;
+    var pickAt = function (cx, cy) {
+      var b = canvas.getBoundingClientRect(); ndc.set(((cx - b.left) / b.width) * 2 - 1, -((cy - b.top) / b.height) * 2 + 1); ray.setFromCamera(ndc, cam);
+      var hit = ray.intersectObjects(Object.keys(objs).map(function (k) { return objs[k].root; }), true)[0], ob = hit && hit.object;
+      while (ob && ob.userData.id == null) ob = ob.parent; return ob ? ob.userData.id : null;
     };
-    canvas.addEventListener('pointerdown', onDown); window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
+    var right = new T.Vector3();
 
     var look = new T.Vector3(0, 2.2, -3), fpos = new T.Vector3(), back = new T.Vector3();
     var v = new T.Vector3(), last = performance.now(), raf = 0, running = true, skyNow = new T.Color(0xF4F2FB), skyWant = new T.Color(0xF4F2FB);
@@ -151,16 +147,21 @@
       if (!running) return;
       raf = requestAnimationFrame(loop);
       var dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; var t = now / 1000;
-      th += ((Math.sin(t * 0.07) * 0.12 + drag) - th) * Math.min(1, dt * 2);
+      th += (Math.sin(t * 0.07) * 0.12 - th) * Math.min(1, dt * 2);
       cam.position.set(Math.sin(th) * 26, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * 26 - 2); cam.lookAt(look);
       // the focus spot sits halfway to the camera, a little above the line of sight
       fpos.copy(look).lerp(cam.position, 0.5); fpos.y += 1.9;
+      // a hand on the card drags the cloud with it (stage px → world units at the spot)
+      if (!held) nudge *= Math.exp(-dt * 6);
+      nudgeNow += (nudge - nudgeNow) * Math.min(1, dt * (held ? 18 : 8));
+      var per = 2 * cam.position.distanceTo(fpos) * Math.tan(cam.fov * Math.PI / 360) / 1080;
+      right.set(1, 0, 0).applyQuaternion(cam.quaternion); fpos.addScaledVector(right, nudgeNow * per);
       skyNow.lerp(skyWant, Math.min(1, dt * 1.5)); scene.fog.color.copy(skyNow);
       var spot = o.getSpot ? o.getSpot() : null, k = 1 - Math.exp(-dt * 1.4), kf = 1 - Math.exp(-dt * 2.4);
       if (spot && !objs[spot]) spot = null;
       Object.keys(objs).forEach(function (id) {
         var ob = objs[id], f = spot === id;
-        if (f) ob.pos.lerp(fpos, kf);
+        if (f) ob.pos.lerp(fpos, held ? 1 - Math.exp(-dt * 14) : kf);
         else if (spot) ob.pos.lerp(back.copy(ob.target).setZ(ob.target.z - 7), k);
         else ob.pos.lerp(ob.target, k);
         var want = ob.ts * (f ? 1.9 : spot ? 0.85 : 1);
@@ -168,6 +169,7 @@
         var sway = f ? 0.35 : 1;
         ob.root.position.set(ob.pos.x + Math.sin(t * 0.3 + ob.ph) * 0.25 * sway, ob.pos.y + Math.sin(t * 0.5 + ob.ph) * 0.22 * sway, ob.pos.z);
         ob.root.scale.setScalar(ob.s); ob.root.rotation.y = Math.sin(t * 0.2 + ob.ph) * 0.15 * sway;
+        ob.root.rotation.z = f ? -nudgeNow * 0.0004 : 0;
         if (ob.fx.update) ob.fx.update(t, ob.ph);
       });
       r.render(scene, cam);
@@ -195,10 +197,14 @@
     return {
       sync: function (list, m) { clouds = list.slice(); mode = m || mode; layout(); },
       setSky: function (hex) { skyWant.set(hex); },
+      pick: pickAt,
+      // px: how far (stage px) the card is dragged; hold: a hand is on it;
+      // jump: start there now (a flipped-in cloud slides in from that side)
+      setNudge: function (px, hold, jump) { nudge = px; held = !!hold; if (hold || jump) nudgeNow = px; },
       snap: function () { Object.keys(objs).forEach(function (id) { objs[id].pos.copy(objs[id].target); objs[id].s = objs[id].ts; }); skyNow.copy(skyWant); },
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
-      dispose: function () { running = false; cancelAnimationFrame(raf); canvas.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); r.dispose(); if (r.forceContextLoss) r.forceContextLoss(); }
+      dispose: function () { running = false; cancelAnimationFrame(raf); r.dispose(); if (r.forceContextLoss) r.forceContextLoss(); }
     };
   };
 })();

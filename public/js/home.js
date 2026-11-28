@@ -248,7 +248,7 @@ async function boot() {
     views = {
       map: createMapView(sections.map, { geo, onInteract: () => restartTimer('map') }),
       cloud: createCloudView(sections.cloud, { geo, onInteract: () => restartTimer('cloud') }),
-      wishes: createWishesView(sections.wishes),
+      wishes: createWishesView(sections.wishes, { onInteract: () => restartTimer('wishes') }),
     };
     await resync();
     // Warm up both 3D scenes now, so the first jump to a new guest or
