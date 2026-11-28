@@ -1,6 +1,6 @@
 # whoswho: who's here?
 
-A guest board for parties and meetups. Run it on your laptop for everyone on the local network, or host it on Cloudflare (Workers and a Durable Object) for everyone, anywhere. Live at **https://whoswho.hypermaps.world**.
+A guest board for parties and meetups. Run it on your laptop for everyone on the local network, or create a party at **https://whoswho.hypermaps.world**: pick a name and a link (`whoswho.hypermaps.world/<your-party>`) and it's live.
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
   - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves. The animals have a life of their own: they dance, nap, flip and do laps of their spot on a long loop, hop over to visit their neighbours (hearts, notes and stars), and every couple of minutes a stadium wave rolls across London. Guests who live on the same spot (closer than an animal is wide) form a crew: they stand in a ring instead of on top of each other, and every few seconds they face each other, groove in time and spin together while the music floats up. The weather changes every 50 seconds (sunshine, breeze, drizzle, snow, rainbows, fog, thunderstorms), led by the moods of what the room has said, the same way the Cloud picks its weather. In a thunderstorm the animals jump at every flash.
@@ -69,23 +69,26 @@ Open `https://<random>.trycloudflare.com/home` on the display. When a page is op
 
 ## On Cloudflare (whoswho.hypermaps.world)
 
-The same app runs as a Cloudflare Worker, with no server of your own:
+The same app runs as a Cloudflare Worker, with no server of your own, and anyone can start a party there:
+
+- **`/`** is the landing page (`pages/landing.html`): what it is, and a short form (party name, link, admin password). `POST /api/parties {slug, title, password}` creates one; `GET /api/parties/:slug` says whether a link is free.
+- **`/<slug>/home`, `/<slug>/hi`, `/<slug>/hax0r`** and `/<slug>/api/…` are that party. Each party is its own Durable Object, named by its link, with its own guests, live connections and admin password (salted PBKDF2). Pages learn their party's path from a `whoswho-root` meta tag, so the browser code is the same as on a laptop.
+- Links from before parties (`/home`, `/hi`, `/hax0r`, `/api/…`) go to the first party, `/abus-until-iam-back-party`.
 
 - **Static files** (`public/` plus three.js, built into `dist/public` by `scripts/build-worker.mjs`) are Workers Static Assets.
-- **Everything else** (pages, API, live updates) goes to one Durable Object, the party (`worker/index.js`). It keeps the data in its own SQLite storage (`worker/sqlite-driver.js` runs `src/db.js` unchanged) and holds every screen's live connection, so Server-Sent Events work directly; no polling needed.
+- **Everything else** (pages, API, live updates) goes to the party's Durable Object (`worker/index.js`). It keeps the data in its own SQLite storage (`worker/sqlite-driver.js` runs `src/db.js` unchanged) and holds every screen's live connection, so Server-Sent Events work directly; no polling needed.
 - **The domain** is a Workers custom domain in `wrangler.jsonc`: Cloudflare manages its DNS record and certificate.
 
 ```sh
 npm run deploy                         # build the assets and deploy (wrangler login first)
-npx wrangler secret put ADMIN_PASSWORD # once; until it's set, /hax0r stays locked
-npm run dev:worker                     # the Worker locally on :8787 (admin password from .dev.vars)
+npm run dev:worker                     # the Worker locally on :8787
 ```
 
 **Moving a party between servers:** `/api/admin/backup` returns everything as JSON (`GET`), and `PUT` replaces everything with such a file. Phones keep working because their tokens move too, though a phone that changes address has to join again, since its token lives in that address's storage. For example, from a laptop to Cloudflare:
 
 ```sh
 curl -u admin:PASSWORD http://localhost:3000/api/admin/backup -o party.json
-curl -u admin:PASSWORD -X PUT -H 'content-type: application/json' --data-binary @party.json https://whoswho.hypermaps.world/api/admin/backup
+curl -u admin:PASSWORD -X PUT -H 'content-type: application/json' --data-binary @party.json https://whoswho.hypermaps.world/<your-party>/api/admin/backup
 ```
 
 ## Configuration

@@ -1,7 +1,11 @@
 // Fetch helpers + live updates over Server-Sent Events.
 
+// Where this party lives: '' on a laptop, '/my-party' on whoswho.hypermaps.world
+// (the server fills in the page's whoswho-root meta tag).
+export const ROOT = document.querySelector('meta[name="whoswho-root"]')?.content || '';
+
 export async function api(method, url, body, headers = {}) {
-  const res = await fetch(url, {
+  const res = await fetch(url.startsWith('/api/') ? ROOT + url : url, {
     method,
     headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -39,7 +43,7 @@ export function live(handlers = {}) {
     handlers[event]?.(data);
   };
 
-  const es = new EventSource('/api/events');
+  const es = new EventSource(`${ROOT}/api/events`);
   let alive = false;
   let connectedBefore = false;
   for (const name of EVENTS) {

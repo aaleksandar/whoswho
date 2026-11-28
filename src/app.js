@@ -6,7 +6,7 @@
 import QRCode from 'qrcode/lib/core/qrcode.js';
 import SvgTag from 'qrcode/lib/renderer/svg-tag.js';
 import { publicGuest, ValidationError, AuthError } from './db.js';
-import { checkAdmin } from './auth.js';
+import { checkAdmin, passwordVerifier } from './auth.js';
 import { parsePostcode, lookupOutcode } from './postcode.js';
 
 const BODY_LIMIT = 32 * 1024;
@@ -37,16 +37,26 @@ async function readJson(request) {
 /**
  * @param {object} o
  * @param {ReturnType<import('./db.js').createStore>} o.db
- * @param {string} [o.adminPassword] admin routes are open when empty
- * @param {(req: Request) => string} o.baseUrl where other devices should go
+ * @param {string} [o.adminPassword] admin routes are open when empty...
+ * @param {(pass: string) => Promise<boolean>} [o.adminCheck] ...or checked by this
+ * @param {(req: Request) => string} o.baseUrl this server's address, as other devices reach it
+ * @param {(req: Request) => string} [o.rootPath] where this party lives on it ('' or '/my-party')
  * @param {(req: Request) => object} [o.info] extra fields for /api/info
  * @param {(name: 'home'|'hi'|'hax0r') => Promise<string>} o.page page HTML
  */
-export function createHandler({ db, adminPassword, baseUrl, info = () => ({}), page }) {
+export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page }) {
+  const verify = adminCheck || passwordVerifier(adminPassword);
   const urls = (req) => {
-    const base = baseUrl(req);
+    const base = baseUrl(req) + rootPath(req);
     return { base, hiUrl: `${base}/hi`, homeUrl: `${base}/home`, adminUrl: `${base}/hax0r` };
   };
+  // Pages work at any root: {{ROOT}} for paths, {{BASE}} for this party's full
+  // address, {{ORIGIN}} for shared files (link previews need absolute URLs).
+  const render = async (name, req) =>
+    html((await page(name))
+      .replaceAll('{{ROOT}}', rootPath(req))
+      .replaceAll('{{BASE}}', urls(req).base)
+      .replaceAll('{{ORIGIN}}', baseUrl(req)));
 
   // ------------------------------------------------------------- live (SSE)
   // Every event gets a sequence number and is kept briefly, so a page behind
@@ -110,11 +120,10 @@ export function createHandler({ db, adminPassword, baseUrl, info = () => ({}), p
 
   // [method, path (with :id), admin?, handler(req, params, url)]
   const routes = [
-    ['GET', '/', false, () => new Response(null, { status: 302, headers: { location: '/home' } })],
-    // Link previews (og:image) need absolute URLs: fill in this server's address.
-    ['GET', '/home', false, async (req) => html((await page('home')).replaceAll('{{BASE}}', urls(req).base))],
-    ['GET', '/hi', false, async (req) => html((await page('hi')).replaceAll('{{BASE}}', urls(req).base))],
-    ['GET', '/hax0r', true, async () => html(await page('hax0r'))],
+    ['GET', '/', false, (req) => new Response(null, { status: 302, headers: { location: `${rootPath(req)}/home` } })],
+    ['GET', '/home', false, (req) => render('home', req)],
+    ['GET', '/hi', false, (req) => render('hi', req)],
+    ['GET', '/hax0r', true, (req) => render('hax0r', req)],
 
     ['GET', '/api/events', false, (req) => events(req)],
     ['GET', '/api/poll', false, (_req, _p, url) => poll(url)],
@@ -256,7 +265,7 @@ export function createHandler({ db, adminPassword, baseUrl, info = () => ({}), p
       pathMatched = true;
       if (r.method !== req.method && !(r.method === 'GET' && req.method === 'HEAD')) continue;
       try {
-        if (r.admin && !(await checkAdmin(req.headers.get('authorization'), adminPassword))) return unauthorized();
+        if (r.admin && !(await checkAdmin(req.headers.get('authorization'), verify))) return unauthorized();
         return await r.fn(req, { id: m[1] }, url);
       } catch (err) {
         if (err instanceof ValidationError) return json({ error: err.message, field: err.field }, 400);

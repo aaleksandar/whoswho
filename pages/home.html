@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="whoswho-root" content="{{ROOT}}">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Who's here?</title>
   <meta name="description" content="The zoo has come to London: every guest is a spirit animal on a 3D map.">
@@ -9,12 +10,12 @@
   <meta property="og:title" content="Who's here?">
   <meta property="og:description" content="The zoo has come to London: every guest is a spirit animal on a 3D map.">
   <meta property="og:url" content="{{BASE}}/home">
-  <meta property="og:image" content="{{BASE}}/img/og-zoo.jpg">
+  <meta property="og:image" content="{{ORIGIN}}/img/og-zoo.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="A 3D paper model of London with a cartoon spirit animal for every guest">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="{{BASE}}/img/og-zoo.jpg">
+  <meta name="twitter:image" content="{{ORIGIN}}/img/og-zoo.jpg">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦊</text></svg>">
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/home.css">
@@ -34,7 +35,7 @@
       <div class="splash-inner">
         <p class="splash-kicker" id="splash-title">Who's here?</p>
         <h2>The zoo opens when<br>the first guest arrives.</h2>
-        <img class="splash-qr" src="/api/qr.svg" alt="QR code to the registration page">
+        <img class="splash-qr" src="{{ROOT}}/api/qr.svg" alt="QR code to the registration page">
         <p>Scan to join &rarr; <span class="hi-url"></span></p>
       </div>
     </section>
@@ -42,7 +43,7 @@
     <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
     <nav class="tabs" id="tabs" aria-label="Views"></nav>
     <aside class="qr-corner" id="qr-corner">
-      <img src="/api/qr.svg" alt="QR code to the registration page" id="qr-img">
+      <img src="{{ROOT}}/api/qr.svg" alt="QR code to the registration page" id="qr-img">
       <div class="qr-caption"><b id="qr-title">Join the zoo</b><span id="qr-sub">Scan · pick your animal</span><span class="hi-url"></span></div>
     </aside>
     <div class="paused-badge" id="paused" hidden>Paused</div>

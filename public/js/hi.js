@@ -3,17 +3,22 @@
 // token from the server.
 
 import { h, $, debounce } from './dom.js';
-import { api } from './api.js';
+import { api, ROOT } from './api.js';
 import { ANIMALS, PALETTE, COLORS, animalLabel } from './animals.js';
 import { sticker } from './sticker.js';
 
-const KEY = 'whoswho.token';
+// One phone can be at several parties on the same site: a token per party.
+const KEY = ROOT ? `whoswho.token:${ROOT}` : 'whoswho.token';
+// Phones that joined before parties had their own address keep their token.
+const LEGACY = { '/abus-until-iam-back-party': 'whoswho.token' };
 const main = $('#hi-main');
 
 const store = {
-  get: () => { try { return localStorage.getItem(KEY); } catch { return null; } },
+  get: () => {
+    try { return localStorage.getItem(KEY) || (LEGACY[ROOT] && localStorage.getItem(LEGACY[ROOT])); } catch { return null; }
+  },
   set: (t) => { try { localStorage.setItem(KEY, t); } catch { /* private mode: works until reload */ } },
-  clear: () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } },
+  clear: () => { try { localStorage.removeItem(KEY); if (LEGACY[ROOT]) localStorage.removeItem(LEGACY[ROOT]); } catch { /* ignore */ } },
 };
 
 let token = store.get();

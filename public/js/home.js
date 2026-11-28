@@ -2,7 +2,7 @@
 // Everything is laid out on a fixed 1920×1080 stage that scales to the screen.
 
 import { h, $ } from './dom.js';
-import { api, live } from './api.js';
+import { api, live, ROOT } from './api.js';
 import { animalLabel } from './animals.js';
 import { sticker } from './sticker.js';
 import { VIBES } from './weather.js';
@@ -207,7 +207,7 @@ async function loadInfo() {
   const info = await api('GET', '/api/info');
   const short = info.hiUrl.replace(/^https?:\/\//, '');
   document.querySelectorAll('.hi-url').forEach((el) => { el.textContent = short; });
-  document.querySelectorAll('img[src^="/api/qr.svg"]').forEach((img) => { img.src = `/api/qr.svg?t=${Date.now()}`; });
+  document.querySelectorAll('img[src*="/api/qr.svg"]').forEach((img) => { img.src = `${ROOT}/api/qr.svg?t=${Date.now()}`; });
 }
 
 async function resync() {

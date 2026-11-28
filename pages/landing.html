@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Who's here? A living map of your party</title>
+  <meta name="description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D map of London on the big screen. Free, ready in a minute.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Who's here? A living map of your party">
+  <meta property="og:description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D map of London on the big screen.">
+  <meta property="og:url" content="{{ORIGIN}}/">
+  <meta property="og:image" content="{{ORIGIN}}/img/og-zoo.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{{ORIGIN}}/img/og-zoo.jpg">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦊</text></svg>">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/landing.css">
+</head>
+<body class="landing">
+  <main>
+    <section class="ld-hero">
+      <p class="ld-kicker">Who's here?</p>
+      <h1>Turn your party into a living map of&nbsp;London.</h1>
+      <p class="ld-lede">Guests scan a QR code, pick a spirit animal and pop up on the big screen where they live. Then everyone finds their people.</p>
+      <div class="ld-ctas">
+        <a class="ld-btn" href="#create">Create your party</a>
+        <a class="ld-link" href="/abus-until-iam-back-party/home">See a real one →</a>
+      </div>
+      <figure class="ld-shot">
+        <img src="/img/og-zoo.jpg" width="1200" height="630" alt="The big screen: a 3D paper model of London with a cartoon animal for every guest, each labelled with their name">
+      </figure>
+    </section>
+
+    <section class="ld-steps" aria-label="How it works">
+      <div><b>1</b><h2>Put it on a screen</h2><p>Open your party's display on a TV or projector.</p></div>
+      <div><b>2</b><h2>Guests scan</h2><p>Name, postcode, spirit animal. Ten seconds, no app.</p></div>
+      <div><b>3</b><h2>The room comes alive</h2><p>The zoo map, a cloud of fun facts, and wish lanterns anyone can answer.</p></div>
+    </section>
+
+    <section class="ld-create" id="create">
+      <form id="create-form" novalidate>
+        <h2>Create your party</h2>
+        <label for="title">Party name</label>
+        <input id="title" name="title" maxlength="60" placeholder="Sam's 30th" autocomplete="off" required>
+        <label for="slug">Your link</label>
+        <div class="ld-slug"><span>whoswho.hypermaps.world/</span><input id="slug" name="slug" maxlength="40" placeholder="sams-30th" autocapitalize="off" autocomplete="off" spellcheck="false" required></div>
+        <p class="ld-hint" id="slug-hint" aria-live="polite">Lowercase letters, numbers and dashes.</p>
+        <label for="password">Admin password</label>
+        <input id="password" name="password" type="password" minlength="6" placeholder="At least 6 characters" autocomplete="new-password" required>
+        <p class="ld-hint">For you only: edit guests and remove anything unwanted.</p>
+        <p class="ld-err" id="err" role="alert"></p>
+        <button class="ld-btn" type="submit" id="go">Create party</button>
+      </form>
+
+      <div class="ld-done" id="done" hidden>
+        <h2>Your party is live 🎉</h2>
+        <p>Save these links. Only the display and the guest link are for sharing.</p>
+        <dl id="links"></dl>
+        <a class="ld-btn" id="open-display" target="_blank" rel="noopener">Open the display</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ld-foot">
+    Made for parties in London: guests appear in their postcode district, never at their address. Free.
+  </footer>
+
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>
