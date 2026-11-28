@@ -5,7 +5,7 @@
 // board starts empty. `npm run demo` seeds it and serves it on port 3001.
 // Pass --db whoswho.sqlite only if you really want samples on the real board.
 
-import { openDb } from '../src/db.js';
+import { openDb } from '../src/node-db.js';
 import { ANIMALS } from '../public/js/animals.js';
 
 const args = process.argv.slice(2);

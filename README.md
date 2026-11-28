@@ -1,6 +1,6 @@
 # whoswho: who's here?
 
-A guest board for parties and meetups, hosted on your laptop and reachable from every device on the local network.
+A guest board for parties and meetups. Run it on your laptop for everyone on the local network, or host it on Cloudflare (Workers and a Durable Object) for everyone, anywhere. Live at **https://whoswho.hypermaps.world**.
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
   - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves. The animals have a life of their own: they dance, nap, flip and do laps of their spot on a long loop, hop over to visit their neighbours (hearts, notes and stars), and every couple of minutes a stadium wave rolls across London. The weather changes every 50 seconds (sunshine, breeze, drizzle, snow, rainbows, fog, thunderstorms), led by the moods of what the room has said, the same way the Cloud picks its weather. In a thunderstorm the animals jump at every flash.
@@ -67,6 +67,27 @@ Open `https://<random>.trycloudflare.com/home` on the display. When a page is op
 - **The address changes every time `cloudflared` restarts.** Reload the display after a restart so the QR updates.
 - **Quick tunnels have no uptime guarantee.** For the night itself, use the local network or a named Cloudflare tunnel on your own domain.
 
+## On Cloudflare (whoswho.hypermaps.world)
+
+The same app runs as a Cloudflare Worker, with no server of your own:
+
+- **Static files** (`public/` plus three.js, built into `dist/public` by `scripts/build-worker.mjs`) are Workers Static Assets.
+- **Everything else** (pages, API, live updates) goes to one Durable Object, the party (`worker/index.js`). It keeps the data in its own SQLite storage (`worker/sqlite-driver.js` runs `src/db.js` unchanged) and holds every screen's live connection, so Server-Sent Events work directly; no polling needed.
+- **The domain** is a Workers custom domain in `wrangler.jsonc`: Cloudflare manages its DNS record and certificate.
+
+```sh
+npm run deploy                         # build the assets and deploy (wrangler login first)
+npx wrangler secret put ADMIN_PASSWORD # once; until it's set, /hax0r stays locked
+npm run dev:worker                     # the Worker locally on :8787 (admin password from .dev.vars)
+```
+
+**Moving a party between servers:** `/api/admin/backup` returns everything as JSON (`GET`), and `PUT` replaces everything with such a file. Phones keep working because their tokens move too, though a phone that changes address has to join again, since its token lives in that address's storage. For example, from a laptop to Cloudflare:
+
+```sh
+curl -u admin:PASSWORD http://localhost:3000/api/admin/backup -o party.json
+curl -u admin:PASSWORD -X PUT -H 'content-type: application/json' --data-binary @party.json https://whoswho.hypermaps.world/api/admin/backup
+```
+
 ## Configuration
 
 Settings come from environment variables, or from a `.env` file in the project folder. Copy `.env.example` to `.env` and fill it in. `.env` is git-ignored, and anything already set in your shell wins over it.
@@ -113,14 +134,20 @@ npm run dev     # restart on file changes
 npm test        # unit + API tests (node:test)
 ```
 
-No build step: Node ≥ 22.13 (uses the built-in `node:sqlite`), Express 5, three.js r149, and vanilla ES modules in the browser.
+No build step on Node: Node ≥ 22.13 (uses the built-in `node:sqlite`), Express 5 for static files, three.js r149, and vanilla ES modules in the browser.
 
 ```
-server.js              routes, REST API (guests, secrets, wishes), SSE, startup banner
-src/db.js              SQLite schema/migrations, validation, CRUD, settings
+server.js              Node: static files, then the shared handler; startup banner
+src/app.js             every route (pages, REST API, admin, backup) and live updates (SSE + poll),
+                       as one fetch-style handler shared by Node and the Worker
+src/db.js              SQLite schema/migrations, validation, CRUD, settings, backup (any driver)
+src/node-db.js         node:sqlite driver (one file)
+worker/                Cloudflare: Worker entry + Durable Object, its SQLite driver
 src/postcode.js        postcode → district centroid (+ jitter)
 src/network.js         LAN IP detection
-src/auth.js            optional Basic auth for admin
+src/postcode.js        postcode → district centroid (+ jitter)
+src/network.js         LAN IP detection
+src/auth.js            Basic auth for admin (Web Crypto)
 src/env.js             loads .env
 pages/                 home / hi / hax0r HTML
 public/js/animals.js   the 22 spirit animals + pin colours (shared by browser + server validation)

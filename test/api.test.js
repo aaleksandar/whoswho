@@ -1,6 +1,6 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { openDb } from '../src/db.js';
+import { openDb } from '../src/node-db.js';
 import { createApp } from '../server.js';
 
 async function start(opts = {}) {
@@ -232,7 +232,37 @@ describe('API (password-protected admin)', () => {
     assert.equal((await s.call('GET', '/api/admin/guests', undefined, auth)).status, 200);
     assert.equal((await s.call('POST', '/api/guests', { name: 'Pub' })).status, 201);
     assert.equal((await s.call('GET', '/api/settings')).status, 200);
+    assert.equal((await s.call('GET', '/api/admin/backup')).status, 401);
+    assert.equal((await s.call('PUT', '/api/admin/backup', {})).status, 401);
   });
+});
+
+test('backup and restore move the whole party, phones included', async () => {
+  const a = await start({ adminPassword: '' });
+  const b = await start({ adminPassword: '' });
+  try {
+    const j = await a.call('POST', '/api/guests', { name: 'Mover', postcode: 'E8 1AA', avatar: { animal: 'fox', color: 'pink' } });
+    const tok = { 'x-guest-token': j.json.token };
+    await a.call('POST', '/api/secrets', { text: 'juggles oranges', about: 'me' }, tok);
+    await a.call('POST', '/api/wishes', { text: 'a canoe' }, tok);
+    await a.call('PUT', '/api/settings', { title: 'Moved party' });
+    const backup = (await a.call('GET', '/api/admin/backup')).json;
+    assert.equal(backup.format, 'whoswho-backup');
+    await b.call('POST', '/api/guests', { name: 'Overwritten' });
+    const r = await b.call('PUT', '/api/admin/backup', backup);
+    assert.deepEqual(r.json, { guests: 1, secrets: 1, wishes: 1, settings: 1 });
+    assert.deepEqual((await b.call('GET', '/api/guests')).json, (await a.call('GET', '/api/guests')).json);
+    assert.equal((await b.call('GET', '/api/secrets')).json[0].text, 'juggles oranges');
+    assert.equal((await b.call('GET', '/api/settings')).json.title, 'Moved party');
+    // the phone's token still works on the new server, and new rows don't clash
+    assert.equal((await b.call('GET', '/api/me', undefined, tok)).json.name, 'Mover');
+    assert.equal((await b.call('POST', '/api/wishes', { text: 'a paddle' }, tok)).status, 201);
+    assert.equal((await b.call('GET', '/api/wishes')).json.length, 2);
+    assert.equal((await b.call('PUT', '/api/admin/backup', { nope: 1 })).status, 400);
+  } finally {
+    await a.stop();
+    await b.stop();
+  }
 });
 
 test('data survives reopening the database file', async (t) => {

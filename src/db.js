@@ -1,7 +1,6 @@
-// SQLite persistence (node:sqlite, synchronous). One file, survives restarts.
-
-import { DatabaseSync } from 'node:sqlite';
-import { randomBytes } from 'node:crypto';
+// SQLite persistence, synchronous. The same queries run on Node's node:sqlite
+// (openDb: one file, survives restarts) and on a Cloudflare Durable Object's
+// SQLite storage (createStore with worker/sqlite-driver.js).
 import { normalizeAvatar } from '../public/js/animals.js';
 import { classify } from '../public/js/weather.js';
 import { resolveLocation } from './postcode.js';
@@ -110,21 +109,31 @@ const rowToWish = (r) => ({ id: r.id, guestId: r.guest_id, text: r.text, created
 
 const rowToSecret = (r) => ({ id: r.id, text: r.text, vibe: r.vibe, by: r.by, aboutId: r.about_id, createdAt: r.created_at });
 
-export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
-  const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;');
+// A phone's identity: 18 random bytes, base64url (24 characters).
+const newToken = () => {
+  const b = crypto.getRandomValues(new Uint8Array(18));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
 
-  const version = db.prepare('PRAGMA user_version').get().user_version;
-  for (let v = version; v < MIGRATIONS.length; v++) {
-    db.exec('BEGIN');
-    try {
+// Columns a backup carries, per table (see exportAll / importAll).
+const TABLES = {
+  guests: ['id', 'name', 'avatar', 'vibes', 'need', 'postcode', 'area', 'lat', 'lng', 'created_at', 'updated_at', 'about', 'token', 'life', 'story'],
+  secrets: ['id', 'text', 'about_id', 'author_id', 'by', 'vibe', 'created_at'],
+  wishes: ['id', 'guest_id', 'text', 'created_at'],
+  settings: ['key', 'value'],
+};
+
+/**
+ * The guest board's data, over any driver with
+ * {exec, prepare(sql) -> {run, get, all}, tx(fn), version(), setVersion(v), close()}.
+ * run() returns {lastInsertRowid, changes}.
+ */
+export function createStore(db) {
+  for (let v = db.version(); v < MIGRATIONS.length; v++) {
+    db.tx(() => {
       db.exec(MIGRATIONS[v]);
-      db.exec(`PRAGMA user_version = ${v + 1}`);
-      db.exec('COMMIT');
-    } catch (e) {
-      db.exec('ROLLBACK');
-      throw e;
-    }
+      db.setVersion(v + 1);
+    });
   }
 
   const q = {
@@ -161,17 +170,7 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     ),
   };
 
-  const tx = (fn) => {
-    db.exec('BEGIN');
-    try {
-      const out = fn();
-      db.exec('COMMIT');
-      return out;
-    } catch (e) {
-      db.exec('ROLLBACK');
-      throw e;
-    }
-  };
+  const tx = (fn) => db.tx(fn);
 
   const applyLocation = (id, postcodeInput) => {
     const loc = resolveLocation(postcodeInput, id);
@@ -185,7 +184,7 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
   };
 
   return {
-    raw: db,
+    raw: db.raw ?? db,
     close: () => db.close(),
 
     listGuests: () => q.all.all().map(rowToGuest),
@@ -203,7 +202,7 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     /** Returns {guest, token}; the token is the phone's identity from then on. */
     createGuest(input) {
       const c = cleanGuestInput(input);
-      const token = randomBytes(18).toString('base64url');
+      const token = newToken();
       return tx(() => {
         const { lastInsertRowid } = q.insert.run(c.name, JSON.stringify(c.avatar), c.need, token);
         const id = Number(lastInsertRowid);
@@ -286,6 +285,33 @@ export function openDb(file = process.env.DB_PATH || 'whoswho.sqlite') {
     },
 
     deleteSecret: (id) => q.secretDel.run(id).changes > 0,
+
+    // ----------------------------------------------------------------- backup
+    /** Everything, rows as stored (tokens included): for moving the party. */
+    exportAll() {
+      const out = { format: 'whoswho-backup', version: 1 };
+      for (const [t, cols] of Object.entries(TABLES)) {
+        out[t] = db.prepare(`SELECT * FROM ${t} ORDER BY 1`).all().map((r) => Object.fromEntries(cols.map((c) => [c, r[c] ?? null])));
+      }
+      return out;
+    },
+
+    /** Replace everything with a backup from exportAll. Returns row counts. */
+    importAll(data) {
+      if (!data || data.format !== 'whoswho-backup') throw new ValidationError('Not a whoswho backup', 'format');
+      const rows = (t) => (Array.isArray(data[t]) ? data[t] : []);
+      return tx(() => {
+        for (const t of ['secrets', 'wishes', 'guests', 'settings']) db.exec(`DELETE FROM ${t}`);
+        const counts = {};
+        for (const t of ['guests', 'secrets', 'wishes', 'settings']) {
+          const cols = TABLES[t];
+          const ins = db.prepare(`INSERT INTO ${t} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+          for (const r of rows(t)) ins.run(...cols.map((c) => (r[c] === undefined ? null : r[c])));
+          counts[t] = rows(t).length;
+        }
+        return counts;
+      });
+    },
 
     // --------------------------------------------------------------- settings
     getSettings() {
