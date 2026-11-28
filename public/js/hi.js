@@ -29,14 +29,23 @@ let me = null;
 const draft = { mode: 'fun', text: '', wish: '' };
 
 const auth = () => ({ 'x-guest-token': token || '' });
+// Canvases are precious on iOS: Safari caps the page's total canvas memory
+// (a few hundred MB) and frees old ones lazily, and past the cap getContext()
+// returns null. So draw each animal once, and only make a new canvas where one
+// is actually added to the page, never in a re-render that runs on every tap.
 const stickers = new Map();
-const stickerFor = (animal) => {
+const stickerSrc = (animal) => {
   if (!stickers.has(animal)) stickers.set(animal, sticker(animal, 192));
-  const c = stickers.get(animal);
-  const copy = document.createElement('canvas');
-  copy.width = copy.height = c.width;
-  copy.getContext('2d').drawImage(c, 0, 0);
-  return copy;
+  return stickers.get(animal);
+};
+/** Paint `animal` into an existing canvas (or a new one). */
+const stickerFor = (animal, into = document.createElement('canvas')) => {
+  const c = stickerSrc(animal);
+  if (into.width !== c.width) into.width = into.height = c.width;
+  into.setAttribute('aria-hidden', 'true');
+  const ctx = into.getContext('2d');
+  if (ctx) { ctx.clearRect(0, 0, into.width, into.height); ctx.drawImage(c, 0, 0); }
+  return into;
 };
 
 function screen(...children) {
@@ -73,23 +82,38 @@ function showJoin() {
   const go = h('button.go', { type: 'submit' }, 'Join the zoo');
   const grid = h('div.zoo', { role: 'radiogroup', 'aria-label': 'Spirit animal' });
   const swatches = h('div.sw', { role: 'radiogroup', 'aria-label': 'Token colour' });
-  const preview = h('div.pick-preview');
+  // Built once: a tap only moves the selection and repaints the one preview
+  // canvas. Rebuilding the grid made ~67 new canvases per tap, and a minute of
+  // browsing animals hit Safari's canvas cap and broke the page (see stickerFor).
+  const previewArt = h('canvas');
+  const artWrap = h('span.pick-art', previewArt);
+  const previewName = h('b');
+  const preview = h('div.pick-preview', artWrap, h('span', previewName, h('small', 'hops on the big map with your name')));
+  const radio = (value, label, onPick, ...kids) => h('button', {
+    type: 'button', role: 'radio', 'aria-label': label, dataset: { v: value },
+    onclick: () => { onPick(value); renderPick(); },
+  }, ...kids);
+  grid.append(...ANIMALS.map((a) => radio(a, animalLabel(a), (v) => { pick.animal = v; }, stickerFor(a))));
+  swatches.append(...COLORS.map((c) => {
+    const b = radio(c, c, (v) => { pick.color = v; }, h('i'));
+    b.style.setProperty('--c1', PALETTE[c][0]);
+    b.style.setProperty('--c2', PALETTE[c][1]);
+    return b;
+  }));
+  const mark = (group, value) => {
+    for (const b of group.children) {
+      const on = b.dataset.v === value;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+  };
 
   function renderPick() {
-    preview.replaceChildren(
-      h('span.pick-art', { style: { background: PALETTE[pick.color][1] } }, stickerFor(pick.animal)),
-      h('span', h('b', `The ${animalLabel(pick.animal).toLowerCase()}`), h('small', 'hops on the big map with your name')),
-    );
-    grid.replaceChildren(...ANIMALS.map((a) =>
-      h('button', {
-        type: 'button', role: 'radio', class: a === pick.animal ? 'on' : '', 'aria-checked': String(a === pick.animal),
-        'aria-label': animalLabel(a), onclick: () => { pick.animal = a; renderPick(); },
-      }, stickerFor(a))));
-    swatches.replaceChildren(...COLORS.map((c) =>
-      h('button', {
-        type: 'button', role: 'radio', class: c === pick.color ? 'on' : '', 'aria-checked': String(c === pick.color),
-        'aria-label': c, style: { '--c1': PALETTE[c][0], '--c2': PALETTE[c][1] }, onclick: () => { pick.color = c; renderPick(); },
-      }, h('i'))));
+    stickerFor(pick.animal, previewArt);
+    artWrap.style.background = PALETTE[pick.color][1];
+    previewName.textContent = `The ${animalLabel(pick.animal).toLowerCase()}`;
+    mark(grid, pick.animal);
+    mark(swatches, pick.color);
   }
 
   const checkPc = debounce(async () => {
