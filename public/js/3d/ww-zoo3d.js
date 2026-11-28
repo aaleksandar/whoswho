@@ -495,8 +495,9 @@
   // A character marker for WWMap: stands on a glossy token, hops slowly, faces the camera, blinks.
   // A guest's animal on the map. Besides hopping, it can walk somewhere
   // (goTo / goHome), face something (face), and act: dance, rock, nap, flip,
-  // look, zoom, greet, startle, wave. Left alone it picks its own acts on a
-  // long, unsynchronised loop; WWLife's director sends it visiting.
+  // look, zoom, greet, startle, wave, groove (in time with its crew: guests
+  // who live on the same spot). Left alone it picks its own acts on a long,
+  // unsynchronised loop; WWLife's director sends it visiting and dancing.
   var ACTS = { dance: 3.2, rock: 3, nap: 8, flip: 1.4, look: 3, zoom: 3.6 };
   var IDLE = ['dance', 'rock', 'nap', 'flip', 'look', 'zoom', 'rock', 'look'];
   Z3.marker = function (ctx, g, i, at, color, opts) {
@@ -516,7 +517,7 @@
     var seed = (g.key || String(i)).split('').reduce(function (n, c) { return (n * 31 + c.charCodeAt(0)) >>> 0; }, 7);
     var rnd = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     var off = new T.Vector3(), goal = null, onArrive = null, faceAt = null, gy = 0, act = null, nextAct = null, zAt = 0, travel = 0;
-    var walking = false;
+    var walking = false, homing = false;
     var self = {
       i: i, pick: [a.root, tok], home: new T.Vector3(at.x, at.y, at.z),
       remove: function () { ctx.scene.remove(grp); },
@@ -524,10 +525,18 @@
       pos: function (v) { return v.set(at.x + off.x, at.y + gy, at.z + off.z); },
       idle: function () { return !goal && !act && off.lengthSq() < 0.01; },
       away: function () { return !!goal || off.lengthSq() > 0.01; },
-      goTo: function (world, cb) { goal = new T.Vector3(world.x - at.x, 0, world.z - at.z); onArrive = cb || null; act = null; faceAt = null; },
-      goHome: function (cb) { goal = new T.Vector3(0, 0, 0); onArrive = cb || null; faceAt = null; },
+      goTo: function (world, cb) { goal = new T.Vector3(world.x - at.x, 0, world.z - at.z); onArrive = cb || null; act = null; faceAt = null; homing = false; },
+      goHome: function (cb) { goal = new T.Vector3(0, 0, 0); onArrive = cb || null; faceAt = null; homing = true; },
+      /** A new spot (someone joined its crew): walk there rather than jump. */
+      moveHome: function (x, y, z) {
+        var dx = at.x - x, dz = at.z - z;
+        off.x += dx; off.z += dz; gy += at.y - y;
+        if (goal && !homing) { goal.x += dx; goal.z += dz; }
+        at.x = x; at.y = y; at.z = z; grp.position.set(x, y, z); self.home.set(x, y, z);
+        if (!goal) self.goHome();
+      },
       face: function (world) { faceAt = world ? world.clone() : null; },
-      act: function (name, dur, t0) { act = { name: name, t0: t0 == null ? performance.now() / 1000 : t0, dur: dur || ACTS[name] || 2 }; },
+      act: function (name, dur, t0, sync) { act = { name: name, t0: t0 == null ? performance.now() / 1000 : t0, dur: dur || ACTS[name] || 2, sync: !!sync }; },
       update: function (t, dt, isF) {
         S += ((isF ? base * 1.35 : base) - S) * Math.min(1, dt * 4);
         var life = performance.now() / 1000 - born;
@@ -541,7 +550,7 @@
           nextAct = t + ACTS[nm] + 10 + rnd() * 22;
         }
         var A = act && t >= act.t0 ? act : null, ak = A ? (t - A.t0) / A.dur : 0;
-        if (A && ak >= 1) { if (A.name === 'zoom') goal = new T.Vector3(0, 0, 0); act = null; A = null; }
+        if (A && ak >= 1) { if (A.name === 'zoom') { goal = new T.Vector3(0, 0, 0); homing = true; } act = null; A = null; }
 
         // walking
         walking = false;
@@ -562,10 +571,13 @@
         gy += (wy - at.y - gy) * Math.min(1, dt * 8);
 
         // the hop
-        var per = isF ? 1.7 : walking ? 0.55 : A && A.name === 'greet' ? 0.5 : A && A.name === 'dance' ? 0.45 : 3.4;
-        var amp = isF ? 1.5 : walking ? 0.42 : A && (A.name === 'greet' || A.name === 'dance') ? 0.55 : 0.8;
+        var groove = A && A.name === 'groove';
+        var per = isF ? 1.7 : walking ? 0.55 : groove ? 0.5 : A && A.name === 'greet' ? 0.5 : A && A.name === 'dance' ? 0.45 : 3.4;
+        var amp = isF ? 1.5 : walking ? 0.42 : groove ? 0.4 : A && (A.name === 'greet' || A.name === 'dance') ? 0.55 : 0.8;
         var air = isF ? 0.55 : walking ? 0.6 : 0.36;
-        var u = ((t + ph) % per) / per, sy = 1, sx = 1, still = A && (A.name === 'nap' || A.name === 'rock' || A.name === 'look' || A.name === 'flip' || A.name === 'startle' || A.name === 'wave');
+        // a crew's moves keep time with each other: count beats from the act's start
+        var beat = A && A.sync ? t - A.t0 : t + ph;
+        var u = (beat % per) / per, sy = 1, sx = 1, still = A && (A.name === 'nap' || A.name === 'rock' || A.name === 'look' || A.name === 'flip' || A.name === 'startle' || A.name === 'wave');
         h = 0; drop = 0;
         if (!still) {
           if (u < air) { var kk = u / air, s = Math.sin(Math.PI * kk); h = s * amp; sy = 1 + 0.12 * s; sx = 1 - 0.05 * s; }
@@ -576,6 +588,7 @@
         if (A) {
           if (A.name === 'nap') { sy = 0.82 + Math.sin(t * 2.2) * 0.03; sx = 1.08; pitch = 0.12; if (t > zAt) { zAt = t + 1.1; if (ctx.fx) ctx.fx('z', self.anchor(new T.Vector3())); } }
           else if (A.name === 'rock') roll = Math.sin(ak * Math.PI * 6) * 0.32;
+          else if (groove) { roll = Math.sin((t - A.t0) * Math.PI * 2) * 0.3; pitch = Math.sin((t - A.t0) * Math.PI * 4) * 0.08; }
           else if (A.name === 'look') look = Math.sin(ak * Math.PI * 2) * 1.3;
           else if (A.name === 'flip' || A.name === 'startle' || A.name === 'wave') {
             var hs = Math.sin(Math.PI * Math.min(1, ak)); h = hs * (A.name === 'flip' ? 2.2 : A.name === 'wave' ? 1.3 : 1.5); sy = 1 + 0.1 * hs;

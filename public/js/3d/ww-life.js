@@ -66,7 +66,7 @@
     // ------------------------------------------------------- director
     var visits = [], nextVisit = 0, nextWave = 0, flashQueue = [];
     var GREETS = ['heart', 'heart', 'note', 'star'];
-    var free = function (m, ms, f) { return ms.indexOf(m) !== f && m.idle() && !m.busy; };
+    var free = function (m, ms, f) { return ms.indexOf(m) !== f && m.idle() && !m.busy && !m.dancing; };
     function startVisit(t, ms, f) {
       var cands = ms.filter(function (m) { return free(m, ms, f); });
       if (cands.length < 2) return;
@@ -89,6 +89,43 @@
     function wave(t, ms, f) {
       var xs = ms.map(function (m) { return m.home.x; }), lo = Math.min.apply(null, xs), span = Math.max(1, Math.max.apply(null, xs) - lo);
       ms.forEach(function (m, n) { if (n !== f && !m.away()) m.act('wave', 0.8, t + 0.3 + (m.home.x - lo) / span * 4.5); });
+    }
+    // crews (guests who live on the same spot) dance together: they face the
+    // middle and groove in time, finish with a spin together, and the music
+    // floats up between them. Then a breather, and again.
+    var crewState = {}, GROOVE = 5.2, SPIN = 1.6;
+    var DANCE_ICONS = ['note', 'note', 'heart', 'star'];
+    function crews(t, ms, f) {
+      var by = {};
+      ms.forEach(function (m, n) { if (m.crew && m.crewAt) (by[m.crew] = by[m.crew] || { at: m.crewAt, list: [] }).list.push({ m: m, n: n }); });
+      Object.keys(crewState).forEach(function (id) { if (!by[id]) delete crewState[id]; });
+      Object.keys(by).forEach(function (id) {
+        var c = by[id], st = crewState[id] || (crewState[id] = { next: t + 2 + rnd() * 4, until: 0 });
+        var mid = new T.Vector3(c.at.x, 0, c.at.z);
+        var ready = function (e) { return e.n !== f && !e.m.away() && !e.m.busy; };
+        if (st.until && t > st.until) {
+          c.list.forEach(function (e) { if (e.m.dancing) { e.m.dancing = false; e.m.face(null); } });
+          st.until = 0; st.next = t + 5 + rnd() * 7;
+        }
+        if (!st.until && t > st.next) {
+          var in_ = c.list.filter(ready);
+          if (in_.length < 2) { st.next = t + 2; return; }
+          st.until = t + GROOVE + SPIN + 0.2; st.spinAt = t + GROOVE; st.emitAt = t + 0.4;
+          st.icon = DANCE_ICONS[Math.floor(rnd() * DANCE_ICONS.length)];
+          in_.forEach(function (e) { e.m.dancing = true; e.m.face(mid); e.m.act('groove', GROOVE, t, true); });
+        }
+        if (!st.until) return;
+        if (st.spinAt && t > st.spinAt) {
+          st.spinAt = 0;
+          c.list.forEach(function (e) { if (e.m.dancing && e.n !== f) e.m.act('dance', SPIN, t, true); });
+        }
+        if (t > st.emitAt) {
+          st.emitAt = t + 0.55;
+          var top = 0; c.list.forEach(function (e) { top = Math.max(top, e.m.home.y); });
+          tmp.set(mid.x + (rnd() - 0.5) * 1.2, top + 2.4, mid.z + (rnd() - 0.5) * 1.2);
+          emit(st.icon, tmp, { size: 0.5 });
+        }
+      });
     }
     function startle(t, ms, f) {
       ms.forEach(function (m, n) { if (n !== f && !m.away()) m.act('startle', 0.55, t + 0.05 + rnd() * 0.15); });
@@ -216,6 +253,7 @@
           }
         });
         visits = visits.filter(function (v) { return v.phase !== 'done'; });
+        crews(t, ms, f);
         // now and then, a stadium wave rolls across London, west to east
         if (t > nextWave) { nextWave = t + 140 + rnd() * 80; wave(t, ms, f); }
 

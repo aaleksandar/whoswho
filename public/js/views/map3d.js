@@ -26,6 +26,55 @@ const WEATHER = {
   thunder: ['Thunderstorms', 'rgba(45, 45, 85, 0.3)'],
 };
 const DEFAULT_SKY = ['sunny', 'breezy', 'rain', 'rainbow', 'snow', 'fog', 'thunder'];
+// Guests in the same district land within a few hundred metres of each other,
+// but an animal is over a kilometre wide on this map. Closer than CREW_KM, they
+// become a crew: they stand in a ring (GAP apart) and dance together.
+const CREW_KM = 1.25;
+const GAP = 1.85;
+
+function spread(gs) {
+  const parent = gs.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  for (let i = 0; i < gs.length; i++) {
+    for (let j = i + 1; j < gs.length; j++) {
+      if (Math.hypot(gs[i].x - gs[j].x, gs[i].y - gs[j].y) < CREW_KM) parent[find(i)] = find(j);
+    }
+  }
+  const crews = new Map();
+  gs.forEach((g, i) => { const r = find(i); crews.set(r, [...(crews.get(r) || []), g]); });
+  for (const members of crews.values()) {
+    if (members.length < 2) continue;
+    members.sort((a, b) => a.id - b.id); // stable places as people join
+    const k = members.length;
+    const cx = members.reduce((n, g) => n + g.x, 0) / k;
+    const cy = members.reduce((n, g) => n + g.y, 0) / k;
+    const r = GAP / (2 * Math.sin(Math.PI / k));
+    const a0 = (members[0].id * 2.39996) % (Math.PI * 2);
+    members.forEach((g, n) => {
+      const a = a0 + (n / k) * Math.PI * 2;
+      Object.assign(g, { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, crew: `c${members[0].id}` });
+    });
+  }
+  // nobody else stands on anybody either
+  for (let it = 0; it < 40; it++) {
+    for (let i = 0; i < gs.length; i++) {
+      for (let j = i + 1; j < gs.length; j++) {
+        const a = gs[i], b = gs[j];
+        let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= GAP) continue;
+        if (d < 1e-6) { dx = 1; dy = 0; d = 1e-6; }
+        const push = (GAP - d) / 2 / Math.max(d, 1e-6);
+        a.x -= dx * push; a.y -= dy * push; b.x += dx * push; b.y += dy * push;
+      }
+    }
+  }
+  // each crew dances around its middle
+  const mid = new Map();
+  for (const g of gs) if (g.crew) { const c = mid.get(g.crew) || { x: 0, y: 0, n: 0 }; c.x += g.x; c.y += g.y; c.n++; mid.set(g.crew, c); }
+  for (const g of gs) if (g.crew) { const c = mid.get(g.crew); g.crewX = c.x / c.n; g.crewY = c.y / c.n; }
+  return gs;
+}
+
 // /home?weather=snow holds one kind of weather (handy for trying them out)
 const PINNED = new URLSearchParams(location.search).get('weather');
 
@@ -198,6 +247,7 @@ export function createMapView(root, { geo, onInteract }) {
           const [x, y] = project(g.lat, g.lng);
           return { ...g, ...g.avatar, x, y, c1: PALETTE[g.avatar.color][0], code: g.outcode, key: `${g.id}:${g.avatar.animal}:${g.avatar.color}` };
         });
+      spread(guests);
       secrets = s;
       guestStat.textContent = guests.length;
       factStat.textContent = secrets.length;

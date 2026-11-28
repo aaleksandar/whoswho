@@ -131,13 +131,16 @@
     var setGuests = function (list) {
       var next = [], keep = {};
       list.forEach(function (g, i) {
-        var m = byKey[g.key];
+        var m = byKey[g.key], gy = topAt(g.x, g.y); if (gy < 0) gy = TOP;
         if (!m) {
-          var gy = topAt(g.x, g.y); if (gy < 0) gy = TOP;
           m = o.marker(ctx, g, i, { x: g.x, z: -g.y, y: gy }, booted ? 0.2 : 0.2 + i * 0.05);
           m.key = g.key; byKey[g.key] = m;
           (m.pick || []).forEach(function (p) { p.userData.key = g.key; });
+        } else if (m.moveHome && (Math.abs(m.home.x - g.x) > 0.01 || Math.abs(m.home.z + g.y) > 0.01)) {
+          m.moveHome(g.x, gy, -g.y); // its crew changed: walk to the new spot
         }
+        // guests who live on the same spot are a crew (they dance together, see WWLife)
+        m.crew = g.crew || null; m.crewAt = g.crew ? { x: g.crewX, z: -g.crewY } : null;
         keep[g.key] = 1; next.push(m);
       });
       Object.keys(byKey).forEach(function (k) { if (!keep[k]) { if (byKey[k].remove) byKey[k].remove(); delete byKey[k]; } });
