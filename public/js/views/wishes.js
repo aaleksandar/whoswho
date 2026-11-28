@@ -3,6 +3,7 @@
 // say hi. Guests can send as many as they like; the sky never runs out.
 
 import { h } from '../dom.js';
+import { STAGE } from '../stage.js';
 
 const SKYLINE = `<svg class="wi-sky" viewBox="0 0 1920 300" preserveAspectRatio="none" aria-hidden="true">
 <path fill="#1B1240" d="M0 300V214h60v-18h40v26h34v-40h28v40h46v-62l30-14 30 14v62h40v-30h52v-56h18v-20h14v20h18v56h44v52h36v-80h10l6-60 6 60h10v80h52v-34c0-22 18-40 40-40s40 18 40 40v34h40v-58h70v-26h12v26h44v58h30v-110l52-126 52 126v110h48v-44h56v-66h20l10-24 10 24h20v66h40v44h52v-90c0-18 16-32 34-32s34 14 34 32v90h46v-58h64v-24h10v24h60v58h44v-36h70v36h40v-70h48v70h52V300Z"/>
@@ -10,7 +11,12 @@ const SKYLINE = `<svg class="wi-sky" viewBox="0 0 1920 300" preserveAspectRatio=
 <path fill="#2A1C55" d="M1662 246l18-86 18 86z"/>
 <path fill="#120B30" d="M0 300v-44c180 10 340-8 520 0s360 18 560 6 380-14 560-4 200 8 280 0V300Z"/>
 </svg>`;
-const MIN_SPAN = 1500;
+// lanterns start just below the stage and rise out of the top of it
+const BOTTOM = STAGE.h + 80;
+// keep whole lanterns, words and all, on the stage as they sway (a narrow
+// stage upright on a phone needs more room at the sides)
+const EDGE = STAGE.w < 1000 ? 215 : 170;
+const MIN_SPAN = Math.max(1500, STAGE.h + 420);
 const RISE = 14; // px per second at the stage's scale: a slow, drifting climb
 const GAP = 70; // vertical room per lantern, so a full sky doesn't pile up
 
@@ -37,7 +43,7 @@ export function createWishesView(root, { onInteract } = {}) {
   let boost = 0; // extra speed from a flick, fading away
   let grab = null;
 
-  const kx = () => 1080 / (root.getBoundingClientRect().height || 1080);
+  const kx = () => STAGE.h / (root.getBoundingClientRect().height || STAGE.h);
   root.addEventListener('pointerdown', (e) => {
     if (grab) return;
     grab = { id: e.pointerId, y: e.clientY, t: performance.now(), v: 0 };
@@ -94,7 +100,7 @@ export function createWishesView(root, { onInteract } = {}) {
         h('div.wi-tx', h('q', w.text), h('span', [g.name, g.area].filter(Boolean).join(' · '))));
       return {
         id: w.id, el,
-        x: 170 + ((i * 0.618034) % 1) * 1580,
+        x: EDGE + ((i * 0.618034) % 1) * (STAGE.w - 2 * EDGE),
         off: prev ? prev.off : (i / n) * SPAN + seeded(w.id, 1) * 120,
         ph: seeded(w.id, 2) * 6.28, zp: seeded(w.id, 3) * 6.28, sp: 0.8 + seeded(w.id, 4) * 0.5,
         glow: prev?.glow || 0,
@@ -126,9 +132,9 @@ export function createWishesView(root, { onInteract } = {}) {
     for (const w of lanterns) {
       const z = 0.5 + 0.5 * Math.sin(T * 0.06 + w.zp);
       const sc = 0.42 + 0.68 * z;
-      const y = 1160 - mod(P * RISE * w.sp * (0.55 + z * 0.6) + w.off, SPAN);
-      const x = w.x + Math.sin(T * 0.15 + w.ph) * 40 + (w.x - 960) * (z - 0.5) * 0.25;
-      const fadeIn = Math.min(1, (1160 - y) / 260);
+      const y = BOTTOM - mod(P * RISE * w.sp * (0.55 + z * 0.6) + w.off, SPAN);
+      const x = w.x + Math.sin(T * 0.15 + w.ph) * 40 + (w.x - STAGE.w / 2) * (z - 0.5) * 0.25;
+      const fadeIn = Math.min(1, (BOTTOM - y) / 260);
       const fadeOut = Math.min(1, (y + 340) / 380);
       const op = Math.max(0, Math.min(fadeIn, fadeOut)) * (0.35 + 0.65 * z);
       const el = w.el;

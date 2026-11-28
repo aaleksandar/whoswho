@@ -3,6 +3,7 @@
 // show big enough to read across the room. Anonymous: no names on this screen.
 
 import { h } from '../dom.js';
+import { STAGE, PORTRAIT } from '../stage.js';
 import { VIBES, groups, forecast, dominant } from '../weather.js';
 
 const MAX_CLOUDS = 35; // in the sky at once; older ones still count in the legend
@@ -11,7 +12,7 @@ const HOLD_MS = 15000; // after someone taps a cloud, or a new one arrives
 const FLIP_PX = 170; // drag the card this far (stage px), or fling it, to flip
 
 export function createCloudView(root, { geo, scale, onInteract }) {
-  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches its words' });
+  const canvas = h('canvas', { width: STAGE.w, height: STAGE.h, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches its words' });
   const toast = h('div.cw-toast.off', { role: 'status' });
   const spotQ = h('q');
   const spotChip = h('span');
@@ -47,6 +48,9 @@ export function createCloudView(root, { geo, scale, onInteract }) {
       boroughs: geo.boroughs,
       getSpot: () => spotId,
       pixelRatio: scale?.(),
+      width: STAGE.w,
+      height: STAGE.h,
+      portrait: PORTRAIT,
     });
     render();
     engine.snap();
@@ -122,7 +126,7 @@ export function createCloudView(root, { geo, scale, onInteract }) {
   let flipT;
   let wheelAcc = 0;
   let wheelAt = 0;
-  const k = () => 1920 / (root.getBoundingClientRect().width || 1920);
+  const k = () => STAGE.w / (root.getBoundingClientRect().width || STAGE.w);
   root.addEventListener('pointerdown', (e) => {
     if (e.button > 0 || grab) return;
     grab = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, moved: 0, t: performance.now(), vx: 0, onCard: spot.contains(e.target) };

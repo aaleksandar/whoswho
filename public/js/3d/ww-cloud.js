@@ -11,11 +11,14 @@
 
   C.create = function (canvas, o) {
     var T = window.THREE, VIBES = o.vibes;
+    // the stage: 1920×1080, or tall (o.portrait) on a phone held upright, where
+    // the sky is a narrow column: fewer clouds across, more above each other
+    var SW = o.width || 1920, SH = o.height || 1080, TALL = !!o.portrait;
     var r = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-    r.setPixelRatio(o.pixelRatio || Math.min(window.devicePixelRatio || 1, 1.5)); r.setSize(1920, 1080, false);
+    r.setPixelRatio(o.pixelRatio || Math.min(window.devicePixelRatio || 1, 1.5)); r.setSize(SW, SH, false);
     r.shadowMap.enabled = true; r.shadowMap.type = T.PCFSoftShadowMap;
     var scene = new T.Scene(); scene.fog = new T.Fog(0xF4F2FB, 30, 80);
-    var cam = new T.PerspectiveCamera(40, 1920 / 1080, 0.5, 300);
+    var cam = new T.PerspectiveCamera(TALL ? 62 : 40, SW / SH, 0.5, 300);
     var env = window.WWZoo3D ? window.WWZoo3D.env(T, r) : null;
     scene.add(new T.HemisphereLight(0xFFFFFF, 0xC9B79A, 0.7));
     var sun = new T.DirectionalLight(0xFFF4E4, 0.75); sun.position.set(-12, 30, 14); sun.castShadow = true;
@@ -108,17 +111,24 @@
       if (mode === 'drift') {
         groups = [];
         clouds.forEach(function (c, k) {
-          var ob = objs[c.id], col = k % 7, row = Math.floor(k / 7) % 5;
-          ob.target.set(-14 + col * 4.6 + (hash(c.id, 1) - 0.5) * 2.4 + (row % 2) * 2.2, -1.5 + row * 2.6 + (hash(c.id, 2) - 0.5) * 1.2, -6 + (hash(c.id, 3) - 0.5) * 9);
+          var ob = objs[c.id];
+          if (TALL) { // three across, up the sky
+            var tc = k % 3, tr = Math.floor(k / 3) % 9;
+            ob.target.set(-5.2 + tc * 5.2 + (hash(c.id, 1) - 0.5) * 1.6 + (tr % 2) * 1.3 - 0.65, -9 + tr * 3 + (hash(c.id, 2) - 0.5) * 1.2, -6 + (hash(c.id, 3) - 0.5) * 6);
+          } else {
+            var col = k % 7, row = Math.floor(k / 7) % 5;
+            ob.target.set(-14 + col * 4.6 + (hash(c.id, 1) - 0.5) * 2.4 + (row % 2) * 2.2, -1.5 + row * 2.6 + (hash(c.id, 2) - 0.5) * 1.2, -6 + (hash(c.id, 3) - 0.5) * 9);
+          }
           ob.ts = 1;
         });
       } else {
         groups = o.groups(clouds, mode);
-        var n = groups.length, rows = n > 4 ? 2 : 1, cols = Math.ceil(n / rows);
+        var n = groups.length, rows = TALL ? n : n > 4 ? 2 : 1, cols = Math.ceil(n / rows);
         groups.forEach(function (g, gi) {
           var row = rows === 2 ? Math.floor(gi / cols) : 0, col = gi % cols, cn = rows === 2 && row === 1 ? n - cols : cols;
           var span = cn > 1 ? 26 : 0, cx = cn > 1 ? -13 + span * col / (cn - 1) : 0;
           var cy = rows === 2 ? (row === 0 ? 4.6 : -1.0) : 1.6, cz = -3 - Math.abs(cx) * 0.18;
+          if (TALL) { cx = (gi % 2 ? 1 : -1) * 2.2; cy = n > 1 ? 14 - (22 * gi) / (n - 1) : 2; cz = -3; }
           var sc = mode === 'voice' ? 0.85 : 0.66;
           g.center = new T.Vector3(cx, cy, cz); g.radius = (mode === 'voice' ? 1.6 : 1.15) * Math.sqrt(g.members.length) + 1;
           g.members.forEach(function (id, j) {
@@ -148,13 +158,14 @@
       raf = requestAnimationFrame(loop);
       var dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; var t = now / 1000;
       th += (Math.sin(t * 0.07) * 0.12 - th) * Math.min(1, dt * 2);
-      cam.position.set(Math.sin(th) * 26, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * 26 - 2); cam.lookAt(look);
+      var cd = TALL ? 30 : 26;
+      cam.position.set(Math.sin(th) * cd, 4 + Math.sin(t * 0.11) * 0.5, Math.cos(th) * cd - 2); cam.lookAt(look);
       // the focus spot sits halfway to the camera, a little above the line of sight
       fpos.copy(look).lerp(cam.position, 0.5); fpos.y += 1.9;
       // a hand on the card drags the cloud with it (stage px → world units at the spot)
       if (!held) nudge *= Math.exp(-dt * 6);
       nudgeNow += (nudge - nudgeNow) * Math.min(1, dt * (held ? 18 : 8));
-      var per = 2 * cam.position.distanceTo(fpos) * Math.tan(cam.fov * Math.PI / 360) / 1080;
+      var per = 2 * cam.position.distanceTo(fpos) * Math.tan(cam.fov * Math.PI / 360) / SH;
       right.set(1, 0, 0).applyQuaternion(cam.quaternion); fpos.addScaledVector(right, nudgeNow * per);
       skyNow.lerp(skyWant, Math.min(1, dt * 1.5)); scene.fog.color.copy(skyNow);
       var spot = o.getSpot ? o.getSpot() : null, k = 1 - Math.exp(-dt * 1.4), kf = 1 - Math.exp(-dt * 2.4);
@@ -179,7 +190,7 @@
         v.set(ob.root.position.x, ob.root.position.y - 1.25 * ob.s, ob.root.position.z);
         var d = cam.position.distanceTo(v); v.project(cam);
         var sc = Math.max(0.55, Math.min(1.2, 24 / d)) * (mode === 'drift' ? 1 : 0.85);
-        el.style.transform = 'translate(' + ((v.x + 1) * 960).toFixed(1) + 'px,' + ((1 - v.y) * 540).toFixed(1) + 'px) translate(-50%,0) scale(' + sc.toFixed(3) + ')';
+        el.style.transform = 'translate(' + ((v.x + 1) * SW / 2).toFixed(1) + 'px,' + ((1 - v.y) * SH / 2).toFixed(1) + 'px) translate(-50%,0) scale(' + sc.toFixed(3) + ')';
         var op = Math.max(0.25, Math.min(1, 1.6 - d / 28)); el.style.opacity = (spot && spot !== id ? op * 0.35 : op).toFixed(2);
         el.style.zIndex = String(1000 - Math.round(d * 10) + (spot === id ? 500 : 0));
       });
@@ -189,7 +200,7 @@
         if (!g || mode === 'drift') { el.style.opacity = 0; return; }
         v.copy(g.center); v.y += g.radius * 0.62 * (mode === 'voice' ? 0.85 : 0.66) + 1.6; v.project(cam);
         // keep cluster labels below the title plate (top 260px of the stage)
-        el.style.transform = 'translate(' + ((v.x + 1) * 960).toFixed(1) + 'px,' + Math.max(o.labelTop || 0, (1 - v.y) * 540).toFixed(1) + 'px) translate(-50%,-100%)'; el.style.opacity = 1;
+        el.style.transform = 'translate(' + ((v.x + 1) * SW / 2).toFixed(1) + 'px,' + Math.max(o.labelTop || 0, (1 - v.y) * SH / 2).toFixed(1) + 'px) translate(-50%,-100%)'; el.style.opacity = 1;
       });
     };
     raf = requestAnimationFrame(loop);
@@ -202,7 +213,7 @@
       // jump: start there now (a flipped-in cloud slides in from that side)
       setNudge: function (px, hold, jump) { nudge = px; held = !!hold; if (hold || jump) nudgeNow = px; },
       snap: function () { Object.keys(objs).forEach(function (id) { objs[id].pos.copy(objs[id].target); objs[id].s = objs[id].ts; }); skyNow.copy(skyWant); },
-      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(1920, 1080, false); },
+      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(SW, SH, false); },
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
       dispose: function () { running = false; cancelAnimationFrame(raf); r.dispose(); if (r.forceContextLoss) r.forceContextLoss(); }

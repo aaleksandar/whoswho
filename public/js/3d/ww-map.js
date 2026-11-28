@@ -4,15 +4,17 @@
 (function () {
   window.WWMap = function (canvas, o) {
     var T = window.THREE, W = { boroughs: o.boroughs, thames: o.thames }, th = o.theme;
+    // the stage it draws on: 1920×1080, or a tall one on a phone held upright
+    var SW = o.width || 1920, SH = o.height || 1080;
     var r = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
     // o.pixelRatio: how sharp to draw the 1920×1080 stage (less on a phone, where it's shown small)
     r.setPixelRatio(o.pixelRatio || Math.min(window.devicePixelRatio || 1, 1.5));
-    r.setSize(1920, 1080, false);
+    r.setSize(SW, SH, false);
     r.shadowMap.enabled = th.shadows !== false;
     r.shadowMap.type = T.PCFSoftShadowMap;
     var scene = new T.Scene();
     if (th.fog != null) scene.fog = new T.Fog(th.fog, th.fogNear || 80, th.fogFar || 220);
-    var cam = new T.PerspectiveCamera(o.fov || 30, 1920 / 1080, 0.5, 600);
+    var cam = new T.PerspectiveCamera(o.fov || 30, SW / SH, 0.5, 600);
     var hemi = new T.HemisphereLight(th.hemi[0], th.hemi[1], th.hemi[2]); scene.add(hemi);
     var sun = new T.DirectionalLight(th.sun[0], th.sun[1]);
     sun.position.set(-26, 50, 26);
@@ -163,7 +165,7 @@
     var ptrs = {}, gesture = null;
     var ray = new T.Raycaster(), ndc = new T.Vector2(), plane = new T.Plane(new T.Vector3(0, 1, 0), 0), hitP = new T.Vector3();
     var rect = function () { return canvas.getBoundingClientRect(); };
-    var scaleK = function () { return 1920 / (rect().width || 1920); };
+    var scaleK = function () { return SW / (rect().width || SW); };
     var poke = function () { touched = Date.now(); if (o.onTouch) o.onTouch(); };
     var groundAt = function (cx, cy) {
       var b = rect(); ndc.set(((cx - b.left) / b.width) * 2 - 1, -((cy - b.top) / b.height) * 2 + 1);
@@ -279,8 +281,8 @@
         m.anchor(v.set(0, 0, 0)); v.y += m.labelLift || 0;
         var d = cam.position.distanceTo(v);
         v.project(cam);
-        var sx = (v.x + 1) * 960, sy = (1 - v.y) * 540;
-        var vis = v.z < 1 && f !== i && sx > -120 && sx < 2040;
+        var sx = (v.x + 1) * SW / 2, sy = (1 - v.y) * SH / 2;
+        var vis = v.z < 1 && f !== i && sx > -120 && sx < SW + 120;
         var s = Math.max(0.7, Math.min(1.2, (o.labelScale || 36) / d));
         el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-100%) scale(' + s.toFixed(3) + ')';
         el.style.opacity = vis ? (f >= 0 ? 0.5 : 1) : 0;
@@ -290,7 +292,7 @@
       if (lead) {
         if (f >= 0 && markers[f]) {
           markers[f].anchor(v.set(0, 0, 0)); v.project(cam);
-          var lx = ((v.x + 1) * 960).toFixed(1), ly = ((1 - v.y) * 540).toFixed(1), ca = o.cardAt || [1320, 330];
+          var lx = ((v.x + 1) * SW / 2).toFixed(1), ly = ((1 - v.y) * SH / 2).toFixed(1), ca = o.cardAt || [1320, 330];
           lead.setAttribute('x1', lx); lead.setAttribute('y1', ly); lead.setAttribute('x2', ca[0]); lead.setAttribute('y2', ca[1]); lead.setAttribute('opacity', '1');
           if (dot) { dot.setAttribute('cx', lx); dot.setAttribute('cy', ly); dot.setAttribute('opacity', '1'); }
         } else { lead.setAttribute('opacity', '0'); if (dot) dot.setAttribute('opacity', '0'); }
@@ -302,7 +304,7 @@
       setGuests: setGuests,
       touched: function () { return touched; },
       zoomBy: function (f) { zoomBy(f); },
-      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(1920, 1080, false); },
+      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(SW, SH, false); },
       // Only the view on screen renders; the others sleep.
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },

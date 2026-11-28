@@ -7,6 +7,7 @@ import { h } from '../dom.js';
 import { PALETTE, animalLabel } from '../animals.js';
 import { projector } from '../geo.js';
 import { DEFAULT_CITY, isLondon, distanceKm } from '../city.js';
+import { STAGE, PORTRAIT } from '../stage.js';
 
 const RIVER = ['Richmond upon Thames', 'Kingston upon Thames', 'Hounslow', 'Hammersmith and Fulham', 'Wandsworth', 'Kensington and Chelsea', 'Westminster', 'Lambeth', 'City of London', 'Southwark', 'Tower Hamlets', 'Greenwich', 'Newham', 'Barking and Dagenham', 'Bexley', 'Havering', 'Lewisham'];
 const PAPER = ['#F2D3A8', '#EDB9A0', '#BFDCB0', '#B5CDE8', '#EFCB7E', '#D9B6DC', '#F5C7A3'];
@@ -87,14 +88,14 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, scale, lowMemory
   const project = projector(city);
   const centre = london ? DEFAULT_CITY : city; // paper London is centred on Charing Cross
   const onMap = (g) => g.lat != null && distanceKm(centre, g) < ON_MAP_KM;
-  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': `Paper pop-up model of ${city.name} with parks and traffic, and a hopping spirit animal for each guest` });
+  const canvas = h('canvas', { width: STAGE.w, height: STAGE.h, 'aria-label': `Paper pop-up model of ${city.name} with parks and traffic, and a hopping spirit animal for each guest` });
   const pinsEl = h('div.mz-pins', { 'aria-hidden': 'true' });
   const lead = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   for (const [k, v] of Object.entries({ x1: 0, y1: 0, x2: 0, y2: 0, stroke: '#C2553A', 'stroke-width': 3, 'stroke-dasharray': '10 8', 'stroke-linecap': 'round', opacity: 0 })) lead.setAttribute(k, v);
   const leadSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   leadSvg.setAttribute('class', 'mz-lead');
-  leadSvg.setAttribute('width', 1920);
-  leadSvg.setAttribute('height', 1080);
+  leadSvg.setAttribute('width', STAGE.w);
+  leadSvg.setAttribute('height', STAGE.h);
   leadSvg.append(lead);
 
   const card = h('section.mz-card.off', { 'aria-live': 'polite' });
@@ -188,8 +189,14 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, scale, lowMemory
         shadowBounds: 24, shadowSize: lowMemory?.() ? 2048 : 4096,
         hemi: [0xFFF4E4, 0xB89A74, 0.5], sun: [0xFFF1DD, 0.72],
       },
-      cam: { wide: { r: 23, phi: 0.82, tx: london ? 1.0 : 0, tz: london ? -0.8 : 0 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
-      labelScale: 24,
+      // upright on a phone, the city is a tall view: look down more steeply,
+      // from further back, and keep the animal in focus above the card
+      cam: PORTRAIT
+        ? { wide: { r: 46, phi: 0.6, tx: london ? 1.0 : 0, tz: london ? -0.8 : 0 }, focus: { r: 22, phi: 0.72, side: 0, lift: 0.5 } }
+        : { wide: { r: 23, phi: 0.82, tx: london ? 1.0 : 0, tz: london ? -0.8 : 0 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
+      labelScale: PORTRAIT ? 34 : 24,
+      width: STAGE.w,
+      height: STAGE.h,
       marker: (ctx, g, i, at, delay) => Z3.marker(ctx, g, i, at, g.c1, { delay }),
       extras: (ctx) => {
         const town = Z.city(ctx, { traffic: () => true, clouds: () => true, london });
@@ -202,7 +209,7 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, scale, lowMemory
       onTouch: () => { touched = Date.now(); onInteract?.(); },
       pins: () => pinEls,
       lead: () => lead,
-      cardAt: [1010, 300],
+      cardAt: PORTRAIT ? [STAGE.w / 2, STAGE.h - 640] : [1010, 300],
       pixelRatio: scale?.(),
     });
     syncMarkers();

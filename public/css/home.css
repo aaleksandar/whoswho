@@ -44,8 +44,8 @@ body.home.idle * { cursor: none !important; }
 .view canvas {
   position: absolute;
   inset: 0;
-  width: 1920px;
-  height: 1080px;
+  width: 100%;
+  height: 100%;
   cursor: grab;
 }
 .view canvas:active { cursor: grabbing; }
@@ -67,7 +67,7 @@ body.home.idle * { cursor: none !important; }
 
 .tabs {
   position: absolute;
-  z-index: 30;
+  z-index: 200; /* above the lanterns rising past it */
   left: 40px;
   bottom: 32px;
   display: flex;
@@ -96,7 +96,7 @@ body.home:not([data-view]) .qr-corner { visibility: hidden; }
 
 .qr-corner {
   position: absolute;
-  z-index: 30;
+  z-index: 200;
   right: 40px;
   bottom: 32px;
   display: flex;
@@ -474,7 +474,7 @@ body.home:not([data-view]) .qr-corner { visibility: hidden; }
   border-right: 1.5px solid rgba(160, 60, 30, 0.25);
   border-radius: 50%;
 }
-.wi-tx { text-align: center; transition: opacity 0.3s; }
+.wi-tx { max-width: 100%; text-align: center; transition: opacity 0.3s; }
 .wi-tx q { display: block; font: italic 400 38px/1.05 var(--serif); quotes: none; text-wrap: balance; text-shadow: 0 2px 24px rgba(12, 9, 48, 0.8); }
 .wi-tx span {
   display: inline-block;
@@ -501,7 +501,7 @@ body.home:not([data-view]) .qr-corner { visibility: hidden; }
   white-space: nowrap;
   pointer-events: none;
 }
-.wi-sky { position: absolute; left: 0; right: 0; bottom: 0; width: 1920px; height: 300px; }
+.wi-sky { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 300px; }
 .wi-top { position: absolute; z-index: 150; left: 0; right: 0; top: 56px; text-align: center; pointer-events: none; text-shadow: 0 2px 24px #120B30, 0 0 8px #120B30; }
 .wi-top h1 { margin: 0; font: 800 64px/1 var(--display); letter-spacing: -0.05em; }
 .wi-top p { margin: 16px 0 0; font: 600 22px var(--body); color: #E9CFE6; }
@@ -519,3 +519,79 @@ body.home:not([data-view]) .qr-corner { visibility: hidden; }
 .splash-inner h2 { margin: 6px 0 28px; font: 800 56px/1.02 var(--display); letter-spacing: -0.05em; }
 .splash-qr { width: 320px; height: 320px; }
 .splash-inner p { margin: 18px 0 0; font: 700 22px var(--body); color: var(--brown); }
+
+/* ------------------------------------------------------------- Portrait
+   A phone held upright gets a tall stage, 720 wide (see stage.js): the
+   same pieces, stacked. The stage shows at about half size on a phone, so
+   type is set for reading in the hand, not across a room. */
+body.portrait .tabs { left: 20px; bottom: 20px; }
+body.portrait .tabs { gap: 2px; padding: 5px; }
+body.portrait .tab { min-height: 58px; padding: 0 12px; font-size: 20px; }
+body.portrait .qr-corner { right: 20px; bottom: 20px; gap: 12px; padding: 10px 16px 10px 10px; }
+body.portrait .qr-corner img { width: 84px; height: 84px; }
+body.portrait .qr-caption { max-width: 150px; }
+body.portrait .qr-caption b { font-size: 19px; }
+body.portrait .qr-caption span { font-size: 14px; }
+body.portrait .qr-caption .hi-url { display: none; }
+.qr-corner.tap { cursor: pointer; }
+body.portrait .toasts { right: 20px; bottom: 150px; }
+body.portrait .toast { max-width: 640px; }
+
+body.portrait .mz-top,
+body.portrait .cw-top { left: 20px; right: 20px; top: 24px; flex-wrap: wrap; gap: 12px; }
+body.portrait .paper-plate h1 { font-size: 40px; }
+body.portrait .paper-plate p { font-size: 30px; }
+body.portrait .paper-plate .mz-wx { font-size: 17px; }
+body.portrait .mz-stats { margin-left: auto; }
+body.portrait .paper-stat { padding: 10px 18px; }
+body.portrait .paper-stat b { font-size: 34px; }
+body.portrait .paper-stat span { font-size: 14px; }
+body.portrait .mz-pin { font-size: 36px; }
+body.portrait .mz-pin small { font-size: 15px; }
+body.portrait .mz-note,
+body.portrait .cw-hint { display: none; }
+body.portrait .mz-zoom { left: auto; right: 20px; top: 330px; }
+body.portrait .mz-zoom button { width: 76px; height: 76px; }
+body.portrait .mz-card {
+  left: 20px;
+  right: 20px;
+  top: auto;
+  bottom: 152px;
+  width: auto;
+  max-height: 520px;
+  padding: 28px 32px 22px;
+}
+body.portrait .mz-kind { font-size: 17px; }
+body.portrait .mz-card h2 { font-size: 72px; }
+body.portrait .mz-sub { font-size: 19px; margin-bottom: 12px; }
+body.portrait .mz-fact { padding: 12px 0; }
+body.portrait .mz-fact q { font-size: 38px; }
+body.portrait .mz-fact.empty q { font-size: 30px; }
+
+body.portrait .cw-plate { max-width: none; }
+body.portrait .cw-plate p { font-size: 30px; }
+body.portrait .cw-chip { font-size: 16px; }
+body.portrait .cw-spot {
+  left: 20px;
+  right: 20px;
+  top: auto;
+  bottom: 160px;
+  width: auto;
+  margin-left: 0;
+  padding: 26px 30px 22px;
+}
+body.portrait .cw-spot q { font-size: 56px; }
+body.portrait .cw-spot[data-len='mid'] q { font-size: 48px; }
+body.portrait .cw-spot[data-len='long'] q { font-size: 40px; }
+body.portrait .cw-spot p { flex-wrap: wrap; font-size: 15px; }
+body.portrait .cw-toast { top: 330px; max-width: 640px; white-space: normal; text-align: center; }
+
+body.portrait .wi-top { top: 40px; padding: 0 30px; }
+body.portrait .wi-top h1 { font-size: 50px; }
+body.portrait .wi-top p { font-size: 22px; }
+body.portrait .wi-hint { bottom: 150px; font-size: 20px; }
+body.portrait .wi-ln { width: 290px; }
+body.portrait .wi-tx q { font-size: 34px; }
+
+body.portrait .splash-inner { margin: 0 24px; padding: 44px 36px; }
+body.portrait .splash-inner h2 { font-size: 46px; }

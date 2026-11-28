@@ -1,5 +1,6 @@
 // Display screen: rotates The Map → The Cloud → Wishes, live-updates over SSE.
-// Everything is laid out on a fixed 1920×1080 stage that scales to the screen.
+// Everything is laid out on a fixed stage that scales to the screen: 1920×1080,
+// or a tall one on a phone held upright (see stage.js).
 
 import { h, $ } from './dom.js';
 import { api, live, ROOT } from './api.js';
@@ -11,6 +12,7 @@ import { createCloudView } from './views/cloud3d.js';
 import { createWishesView } from './views/wishes.js';
 import { isLondon } from './city.js';
 import { genCity } from './3d/gen-city.js';
+import { STAGE, PORTRAIT, flipped } from './stage.js';
 
 const LABELS = { map: 'The Map', cloud: 'The Cloud', wishes: 'Wishes' };
 const QR_COPY = {
@@ -44,11 +46,18 @@ const available = () => settings.views.filter((id) => views[id]?.hasData(state))
 // the whole stage on every frame of a pinch ran the phone out of memory.
 const viewport = () => [document.documentElement.clientWidth || window.innerWidth, document.documentElement.clientHeight || window.innerHeight];
 let k = 1;
+document.body.classList.toggle('portrait', PORTRAIT);
+stage.style.width = `${STAGE.w}px`;
+stage.style.height = `${STAGE.h}px`;
+let turnT;
 function fit() {
   const [w, h] = viewport();
-  k = Math.min(w / 1920, h / 1080);
+  k = Math.min(w / STAGE.w, h / STAGE.h);
   stage.style.setProperty('--k', k.toFixed(4));
   rescale();
+  // turned from upright to sideways (or back): the other layout, built fresh
+  clearTimeout(turnT);
+  turnT = setTimeout(() => { if (flipped()) location.reload(); }, 600);
 }
 
 // Draw the 3D views at about the size they're shown: a phone shows the
@@ -57,7 +66,9 @@ function fit() {
 // A phone (even held sideways) has far less memory for a page than a laptop
 // driving a TV: at most 1×, and only the view on screen's 3D scene kept warm.
 const PHONE = Math.min(window.screen?.width || 1920, window.screen?.height || 1080) < 600;
-const renderScale = () => Math.round(Math.min(PHONE ? 1 : 1.5, Math.max(0.5, k * (window.devicePixelRatio || 1))) * 20) / 20;
+// (Upright, the stage is only 720 wide, so it can be drawn a little sharper.)
+const MAX_SCALE = PHONE ? (PORTRAIT ? 1.25 : 1) : 1.5;
+const renderScale = () => Math.round(Math.min(MAX_SCALE, Math.max(0.5, k * (window.devicePixelRatio || 1))) * 20) / 20;
 const small = () => PHONE || renderScale() < 1;
 let scaleT;
 let drawnAt = 0;
@@ -105,7 +116,7 @@ function activate(id) {
   document.body.dataset.view = id;
   const [title, sub] = QR_COPY[id] || QR_COPY.splash;
   $('#qr-title').textContent = title;
-  $('#qr-sub').textContent = sub;
+  $('#qr-sub').textContent = PHONE ? sub.replace('Scan', 'Tap here') : sub;
   renderTabs();
 }
 
@@ -256,8 +267,19 @@ function applySettings(s) {
   else renderTabs();
 }
 
+// On a phone the QR is right under your thumb: tap it to join.
+let hiUrl = `${ROOT}/hi`;
+if (PHONE) {
+  const qr = $('#qr-corner');
+  qr.classList.add('tap');
+  qr.setAttribute('role', 'link');
+  qr.tabIndex = 0;
+  qr.addEventListener('click', () => { location.href = hiUrl; });
+}
+
 async function loadInfo() {
   const info = await api('GET', '/api/info');
+  hiUrl = info.hiUrl;
   const short = info.hiUrl.replace(/^https?:\/\//, '');
   document.querySelectorAll('.hi-url').forEach((el) => { el.textContent = short; });
   document.querySelectorAll('img[src*="/api/qr.svg"]').forEach((img) => { img.src = `${ROOT}/api/qr.svg?t=${Date.now()}`; });
