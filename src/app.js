@@ -46,14 +46,18 @@ async function readJson(request) {
  */
 export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page }) {
   const verify = adminCheck || passwordVerifier(adminPassword);
+  const homePath = (req, base) => (rootPath(req) ? base : `${base}/home`);
   const urls = (req) => {
     const base = baseUrl(req) + rootPath(req);
-    return { base, hiUrl: `${base}/hi`, homeUrl: `${base}/home`, adminUrl: `${base}/hax0r` };
+    // a party's own link is its display; on a laptop that's /home
+    return { base, hiUrl: `${base}/hi`, homeUrl: homePath(req, base), adminUrl: `${base}/hax0r` };
   };
   // Pages work at any root: {{ROOT}} for paths, {{BASE}} for this party's full
   // address, {{ORIGIN}} for shared files (link previews need absolute URLs).
   const render = async (name, req) =>
     html((await page(name))
+      .replaceAll('{{HOME}}', homePath(req, rootPath(req)))
+      .replaceAll('{{HOME_URL}}', urls(req).homeUrl)
       .replaceAll('{{ROOT}}', rootPath(req))
       .replaceAll('{{BASE}}', urls(req).base)
       .replaceAll('{{ORIGIN}}', baseUrl(req)));
@@ -120,8 +124,13 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
 
   // [method, path (with :id), admin?, handler(req, params, url)]
   const routes = [
-    ['GET', '/', false, (req) => new Response(null, { status: 302, headers: { location: `${rootPath(req)}/home` } })],
-    ['GET', '/home', false, (req) => render('home', req)],
+    // A party (/my-party) shows its display at its own link; a laptop at /home.
+    ['GET', '/', false, (req) => (rootPath(req) ? render('home', req) : new Response(null, { status: 302, headers: { location: '/home' } }))],
+    ['GET', '/home', false, (req) => {
+      if (!rootPath(req)) return render('home', req);
+      const q = new URL(req.url).search;
+      return new Response(null, { status: 301, headers: { location: `${rootPath(req)}${q}` } });
+    }],
     ['GET', '/hi', false, (req) => render('hi', req)],
     ['GET', '/hax0r', true, (req) => render('hax0r', req)],
 

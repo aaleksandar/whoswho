@@ -23,7 +23,9 @@ import landing from '../pages/landing.html';
 const PAGES = { home, hi, hax0r };
 
 // Links from before parties had their own address go to the first party.
-const LEGACY = 'abus-until-iam-back-party';
+const LEGACY = 'until-iam-back-party';
+// Renamed parties: the old link keeps working (and can't be claimed again).
+const ALIASES = { 'abus-until-iam-back-party': 'until-iam-back-party' };
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
 const RESERVED = new Set([
   'api', 'js', 'css', 'img', 'data', 'fonts', 'vendor', 'home', 'hi', 'hax0r', 'admin', 'new', 'create',
@@ -36,7 +38,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const html = (text, status = 200) => new Response(text, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
 const checkSlug = (slug) => {
   if (typeof slug !== 'string' || !SLUG_RE.test(slug)) return 'Use 3–40 lowercase letters, numbers and dashes';
-  if (RESERVED.has(slug)) return 'That address is reserved, try another';
+  if (RESERVED.has(slug) || ALIASES[slug]) return 'That address is reserved, try another';
   return null;
 };
 
@@ -131,15 +133,17 @@ export default {
     }
 
     // Before parties: /home, /hi, /hax0r and the API at the top level.
-    if (['/home', '/hi', '/hax0r'].includes(path)) return Response.redirect(`${url.origin}/${LEGACY}${path}${url.search}`, 302);
+    if (path === '/home') return Response.redirect(`${url.origin}/${LEGACY}${url.search}`, 302);
+    if (['/hi', '/hax0r'].includes(path)) return Response.redirect(`${url.origin}/${LEGACY}${path}${url.search}`, 302);
     if (path.startsWith('/api/')) return forward(request, env, LEGACY, path);
 
     const m = path.match(/^\/([^/]+)(\/.*)?$/);
     const slug = m ? decodeURIComponent(m[1]).toLowerCase() : '';
+    if (ALIASES[slug]) return new Response(null, { status: 307, headers: { location: `${url.origin}/${ALIASES[slug]}${m[2] || ''}${url.search}` } });
     if (!m || checkSlug(slug)) return html('<!doctype html><meta charset="utf-8"><title>Not found</title><p>Not found. <a href="/">whoswho</a>', 404);
     if (m[1] !== slug) return Response.redirect(`${url.origin}/${slug}${m[2] || ''}${url.search}`, 301);
-    if (!m[2]) return Response.redirect(`${url.origin}/${slug}/home${url.search}`, 302);
-    return forward(request, env, slug, m[2]);
+    if (m[2] === '/') return Response.redirect(`${url.origin}/${slug}${url.search}`, 301);
+    return forward(request, env, slug, m[2] || '/'); // the party's own link is its display
   },
 };
 

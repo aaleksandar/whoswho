@@ -85,11 +85,11 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) throw Object.assign(new Error(r.error || 'Something went wrong, try again'), { field: r.field });
     const base = `${location.origin}/${r.slug}`;
     $('#links').replaceChildren(
-      ...linkRow('Display', `${base}/home`, 'for the big screen'),
+      ...linkRow('Display', base, 'for the big screen'),
       ...linkRow('Guests', `${base}/hi`, 'or they scan the QR on the display'),
       ...linkRow('Admin', `${base}/hax0r`, 'your password'),
     );
-    $('#open-display').href = `${base}/home`;
+    $('#open-display').href = base;
     form.hidden = true;
     $('#done').hidden = false;
     $('#done').scrollIntoView({ behavior: 'smooth', block: 'start' });

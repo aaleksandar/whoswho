@@ -73,7 +73,7 @@ The same app runs as a Cloudflare Worker, with no server of your own, and anyone
 
 - **`/`** is the landing page (`pages/landing.html`): what it is, and a short form (party name, link, admin password). `POST /api/parties {slug, title, password}` creates one; `GET /api/parties/:slug` says whether a link is free.
 - **`/<slug>/home`, `/<slug>/hi`, `/<slug>/hax0r`** and `/<slug>/api/…` are that party. Each party is its own Durable Object, named by its link, with its own guests, live connections and admin password (salted PBKDF2). Pages learn their party's path from a `whoswho-root` meta tag, so the browser code is the same as on a laptop.
-- Links from before parties (`/home`, `/hi`, `/hax0r`, `/api/…`) go to the first party, `/abus-until-iam-back-party`.
+- Links from before parties (`/home`, `/hi`, `/hax0r`, `/api/…`) go to the first party, `/until-iam-back-party`.
 
 - **Static files** (`public/` plus three.js, built into `dist/public` by `scripts/build-worker.mjs`) are Workers Static Assets.
 - **Everything else** (pages, API, live updates) goes to the party's Durable Object (`worker/index.js`). It keeps the data in its own SQLite storage (`worker/sqlite-driver.js` runs `src/db.js` unchanged) and holds every screen's live connection, so Server-Sent Events work directly; no polling needed.

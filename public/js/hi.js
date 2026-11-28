@@ -9,16 +9,18 @@ import { sticker } from './sticker.js';
 
 // One phone can be at several parties on the same site: a token per party.
 const KEY = ROOT ? `whoswho.token:${ROOT}` : 'whoswho.token';
-// Phones that joined before parties had their own address keep their token.
-const LEGACY = { '/abus-until-iam-back-party': 'whoswho.token' };
+// Phones that joined before this party had its own address (or under its old
+// name) keep their token.
+const LEGACY = { '/until-iam-back-party': ['whoswho.token', 'whoswho.token:/abus-until-iam-back-party'] };
+const legacyToken = () => (LEGACY[ROOT] || []).map((k) => localStorage.getItem(k)).find(Boolean) || null;
 const main = $('#hi-main');
 
 const store = {
   get: () => {
-    try { return localStorage.getItem(KEY) || (LEGACY[ROOT] && localStorage.getItem(LEGACY[ROOT])); } catch { return null; }
+    try { return localStorage.getItem(KEY) || legacyToken(); } catch { return null; }
   },
   set: (t) => { try { localStorage.setItem(KEY, t); } catch { /* private mode: works until reload */ } },
-  clear: () => { try { localStorage.removeItem(KEY); if (LEGACY[ROOT]) localStorage.removeItem(LEGACY[ROOT]); } catch { /* ignore */ } },
+  clear: () => { try { [KEY, ...(LEGACY[ROOT] || [])].forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ } },
 };
 
 let token = store.get();
