@@ -3,7 +3,8 @@
 // SQLite storage (createStore with worker/sqlite-driver.js).
 import { normalizeAvatar } from '../public/js/animals.js';
 import { classify } from '../public/js/weather.js';
-import { resolveLocation } from './postcode.js';
+import { resolveLocation, jitter, parsePostcode, lookupOutcode } from './postcode.js';
+import { DEFAULT_CITY, cleanCity } from '../public/js/city.js';
 
 export const LIMITS = { name: 40, need: 140, secret: 140 };
 export const VIEW_IDS = ['map', 'cloud', 'wishes'];
@@ -12,6 +13,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   title: "Who's here?",
   rotateSeconds: 40,
   views: VIEW_IDS,
+  city: DEFAULT_CITY,
 });
 
 const MIGRATIONS = [
@@ -99,10 +101,11 @@ function rowToGuest(r) {
   };
 }
 
-/** Public projection: only the district (E8), never the full postcode. */
+/** Public projection: only the district (E8, or its name), never what was typed. */
 export function publicGuest(g) {
   const { postcode, ...rest } = g;
-  return { ...rest, outcode: g.area && postcode ? postcode.split(' ')[0] : null };
+  const pc = g.area && parsePostcode(postcode || '');
+  return { ...rest, outcode: pc && lookupOutcode(pc.outcode) ? pc.outcode : null };
 }
 
 const rowToWish = (r) => ({ id: r.id, guestId: r.guest_id, text: r.text, createdAt: r.created_at });
@@ -172,9 +175,16 @@ export function createStore(db) {
 
   const tx = (fn) => db.tx(fn);
 
-  const applyLocation = (id, postcodeInput) => {
-    const loc = resolveLocation(postcodeInput, id);
-    q.setLoc.run(loc.postcode, loc.area, loc.lat, loc.lng, id);
+  // `place` is what src/place.js found for the typed text (before jitter);
+  // without one (seeding, tests, old callers) London postcodes resolve here.
+  const applyLocation = (id, postcodeInput, place) => {
+    if (!place) {
+      const loc = resolveLocation(postcodeInput, id);
+      q.setLoc.run(loc.postcode, loc.area, loc.lat, loc.lng, id);
+      return;
+    }
+    const p = place.lat == null ? place : jitter(place.lat, place.lng, `${id}:${place.key}`);
+    q.setLoc.run(place.postcode, place.area, p.lat, p.lng, id);
   };
 
   const authorFor = (token) => {
@@ -200,25 +210,26 @@ export function createStore(db) {
     },
 
     /** Returns {guest, token}; the token is the phone's identity from then on. */
-    createGuest(input) {
+    createGuest(input, place) {
       const c = cleanGuestInput(input);
       const token = newToken();
       return tx(() => {
         const { lastInsertRowid } = q.insert.run(c.name, JSON.stringify(c.avatar), c.need, token);
         const id = Number(lastInsertRowid);
         if (c.need) q.wishInsert.run(id, c.need);
-        applyLocation(id, c.postcodeInput);
+        applyLocation(id, c.postcodeInput, place);
         return { guest: rowToGuest(q.get.get(id)), token };
       });
     },
 
-    updateGuest(id, input) {
+    /** `place` as for createGuest; 'keep' leaves where they are alone. */
+    updateGuest(id, input, place) {
       const c = cleanGuestInput(input);
       return tx(() => {
         const existing = q.get.get(id);
         if (!existing) return null;
         q.update.run(c.name, JSON.stringify(c.avatar), id); // wishes are moderated one by one
-        applyLocation(id, c.postcodeInput);
+        if (place !== 'keep') applyLocation(id, c.postcodeInput, place);
         return rowToGuest(q.get.get(id));
       });
     },
@@ -322,6 +333,7 @@ export function createStore(db) {
       // Views from older versions (graph, needs) no longer exist.
       const views = Array.isArray(out.views) ? VIEW_IDS.filter((v) => out.views.includes(v)) : [];
       out.views = views.length ? views : [...VIEW_IDS];
+      out.city = cleanCity(out.city) || { ...DEFAULT_CITY };
       return out;
     },
 
@@ -344,6 +356,11 @@ export function createStore(db) {
         const views = Array.isArray(src.views) ? VIEW_IDS.filter((v) => src.views.includes(v)) : [];
         if (!views.length) throw new ValidationError('Enable at least one view', 'views');
         clean.views = views;
+      }
+      if ('city' in src) {
+        const city = cleanCity(src.city);
+        if (!city) throw new ValidationError('Pick a city from the list', 'city');
+        clean.city = city;
       }
       tx(() => {
         for (const [k, v] of Object.entries(clean)) q.settingsPut.run(k, JSON.stringify(v));

@@ -9,6 +9,8 @@ import { VIBES } from './weather.js';
 import { createMapView } from './views/map3d.js';
 import { createCloudView } from './views/cloud3d.js';
 import { createWishesView } from './views/wishes.js';
+import { isLondon } from './city.js';
+import { genCity } from './3d/gen-city.js';
 
 const LABELS = { map: 'The Map', cloud: 'The Cloud', wishes: 'Wishes' };
 const QR_COPY = {
@@ -205,7 +207,12 @@ async function onSecrets(e) {
   }
 }
 
+// The city the 3D scenes were built for. A new one needs new scenes: reload.
+let builtFor = null;
+const sameCity = (a, b) => a && b && a.lat === b.lat && a.lng === b.lng;
+
 function applySettings(s) {
+  if (builtFor && !sameCity(builtFor, s.city)) { location.reload(); return; }
   const viewsChanged = JSON.stringify(s.views) !== JSON.stringify(settings.views);
   const timingChanged = s.rotateSeconds !== settings.rotateSeconds;
   settings = s;
@@ -259,9 +266,11 @@ document.addEventListener('mousemove', () => {
 async function boot() {
   let geo;
   try {
-    geo = await fetch('/data/london-3d.json').then((r) => r.json());
+    const { city } = await api('GET', '/api/settings');
+    geo = isLondon(city) ? await fetch('/data/london-3d.json').then((r) => r.json()) : genCity(city);
+    builtFor = city;
     views = {
-      map: createMapView(sections.map, { geo, onInteract: () => restartTimer('map') }),
+      map: createMapView(sections.map, { geo, city, onInteract: () => restartTimer('map') }),
       cloud: createCloudView(sections.cloud, { geo, onInteract: () => restartTimer('cloud') }),
       wishes: createWishesView(sections.wishes, { onInteract: () => restartTimer('wishes') }),
     };

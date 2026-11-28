@@ -393,10 +393,23 @@ Z.city = function (ctx, opts) {
     const keep = (lat, lon, r) => { const p = P(lat, lon); marks.push([p[0], -p[1], r]); };
 
     // parks: green paper layers with paper trees
-    const parks = [[51.5073, -0.1657, 1.3, 0.5, 0.05, 1], [51.5313, -0.157, 0.62, 0.55, 0, 0], [51.5608, -0.163, 0.85, 0.7, 0.3, 0], [51.4425, -0.275, 1.7, 1.5, 0.2, 0], [51.4769, -0.0005, 0.45, 0.36, 0, 0], [51.5362, -0.04, 0.72, 0.3, -0.35, 0], [51.4791, -0.1566, 0.42, 0.3, 0, 0], [51.4615, -0.15, 0.42, 0.3, 0.2, 0], [51.434, -0.235, 0.9, 0.8, 0, 0], [51.41, -0.335, 0.95, 0.7, 0.3, 0], [51.557, -0.027, 0.42, 0.7, 0.2, 0], [51.421, -0.069, 0.42, 0.35, 0, 0], [51.615, 0.03, 0.6, 1.4, 0.15, 0]];
+    // opts.london: the real London (its parks, landmarks and roads); otherwise
+    // a generated paper city with its centre at 0,0 and no river.
+    const london = opts.london !== false;
+    const CX = london ? 1.5 : 0, CY = london ? 0.3 : 0;
+    const parksLondon = [[51.5073, -0.1657, 1.3, 0.5, 0.05, 1], [51.5313, -0.157, 0.62, 0.55, 0, 0], [51.5608, -0.163, 0.85, 0.7, 0.3, 0], [51.4425, -0.275, 1.7, 1.5, 0.2, 0], [51.4769, -0.0005, 0.45, 0.36, 0, 0], [51.5362, -0.04, 0.72, 0.3, -0.35, 0], [51.4791, -0.1566, 0.42, 0.3, 0, 0], [51.4615, -0.15, 0.42, 0.3, 0.2, 0], [51.434, -0.235, 0.9, 0.8, 0, 0], [51.41, -0.335, 0.95, 0.7, 0.3, 0], [51.557, -0.027, 0.42, 0.7, 0.2, 0], [51.421, -0.069, 0.42, 0.35, 0, 0], [51.615, 0.03, 0.6, 1.4, 0.15, 0]];
+    const parks = london ? parksLondon : (() => { // [lat, lon] stand-ins: x/y in km, through P below
+      const out = [];
+      for (let k = 0, g = 0; out.length < 12 && g < 400; g++) {
+        const r = 2 + Math.pow(ctx.rnd(), 0.8) * 14, a = ctx.rnd() * 6.283, x = Math.cos(a) * r, y = Math.sin(a) * r * 0.85;
+        if (ctx.topAt(x, y) < 0) continue;
+        out.push([x, y, 0.45 + ctx.rnd() * 0.9, 0.35 + ctx.rnd() * 0.6, ctx.rnd() * 3, k++ % 4 === 0 ? 1 : 0, true]);
+      }
+      return out;
+    })();
     const treePts = [];
     parks.forEach((pk) => {
-      const c = P(pk[0], pk[1]), y = top(c[0], c[1]);
+      const c = pk[6] ? [pk[0], pk[1]] : P(pk[0], pk[1]), y = top(c[0], c[1]);
       const sh = new T.Shape(); sh.absellipse(0, 0, pk[2], pk[3], 0, Math.PI * 2, false, pk[4]);
       const g = new T.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false, curveSegments: 28 }); g.rotateX(-Math.PI / 2);
       const m = new T.Mesh(g, new T.MeshLambertMaterial({ color: 0xA8D39A })); m.position.set(c[0], y, -c[1]); m.receiveShadow = true; S.add(m);
@@ -404,7 +417,7 @@ Z.city = function (ctx, opts) {
       const n = Math.round(pk[2] * pk[3] * 16) + 4;
       for (let k = 0; k < n; k++) { const a = ctx.rnd() * 6.283, rr = Math.sqrt(ctx.rnd()) * 0.85; const lx = Math.cos(a) * pk[2] * rr, ly = Math.sin(a) * pk[3] * rr; const cr = Math.cos(pk[4]), sr = Math.sin(pk[4]); treePts.push([c[0] + lx * cr - ly * sr, c[1] + lx * sr + ly * cr, y + 0.05, 0.16 + ctx.rnd() * 0.12]); }
     });
-    for (let k = 0; k < 260; k++) { const x = -24 + ctx.rnd() * 52, y = -20 + ctx.rnd() * 40, h = ctx.topAt(x, y); if (h < 0 || Math.hypot(x - 1.5, y) < 5 || ctx.nearRiver(x, -y, 0.3)) continue; treePts.push([x, y, h, 0.14 + ctx.rnd() * 0.1]); }
+    for (let k = 0; k < 260; k++) { const x = -24 + ctx.rnd() * 52, y = -20 + ctx.rnd() * 40, h = ctx.topAt(x, y); if (h < 0 || Math.hypot(x - CX, y) < 5 || ctx.nearRiver(x, -y, 0.3)) continue; treePts.push([x, y, h, 0.14 + ctx.rnd() * 0.1]); }
     const crown = new T.IcosahedronGeometry(1, 0), trunk = new T.CylinderGeometry(0.2, 0.25, 1, 5);
     const ci = new T.InstancedMesh(crown, new T.MeshStandardMaterial({ roughness: 1, flatShading: true }), treePts.length);
     const ti = new T.InstancedMesh(trunk, mat('#9A6B4A'), treePts.length);
@@ -418,9 +431,11 @@ Z.city = function (ctx, opts) {
     });
     S.add(ci); S.add(ti);
 
-    // landmarks (papercraft)
-    { const g = new T.Group(); g.add(box(0.17, 1.3, 0.17, '#E8C98E')); g.add(box(0.21, 0.16, 0.21, '#FFFDF8', 0, 0.98)); g.add(cone(0.15, 0.42, 4, '#6E8FA8', 0, 1.14, 0, Math.PI / 4)); g.add(box(0.24, 0.26, 0.95, '#E3C489', 0, 0, 0.56)); g.add(box(0.2, 0.62, 0.2, '#E8C98E', 0, 0, 1.05)); place(g, 51.5007, -0.1246, 0.15); keep(51.5007, -0.1246, 0.6); }
+    // landmarks (papercraft), London only
     let eyeRim;
+    let bascules = [];
+    if (london) {
+    { const g = new T.Group(); g.add(box(0.17, 1.3, 0.17, '#E8C98E')); g.add(box(0.21, 0.16, 0.21, '#FFFDF8', 0, 0.98)); g.add(cone(0.15, 0.42, 4, '#6E8FA8', 0, 1.14, 0, Math.PI / 4)); g.add(box(0.24, 0.26, 0.95, '#E3C489', 0, 0, 0.56)); g.add(box(0.2, 0.62, 0.2, '#E8C98E', 0, 0, 1.05)); place(g, 51.5007, -0.1246, 0.15); keep(51.5007, -0.1246, 0.6); }
     { const g = new T.Group(); eyeRim = new T.Group(); eyeRim.position.y = 0.86;
       eyeRim.add(new T.Mesh(new T.TorusGeometry(0.72, 0.035, 6, 48), mat('#FFFFFF')));
       for (let k = 0; k < 16; k++) { const sp = new T.Mesh(new T.BoxGeometry(0.012, 1.44, 0.012), mat('#FFFFFF')); sp.rotation.z = k / 16 * Math.PI; eyeRim.add(sp); }
@@ -429,7 +444,6 @@ Z.city = function (ctx, opts) {
       g.add(eyeRim); [-1, 1].forEach((m) => { const leg = new T.Mesh(new T.BoxGeometry(0.04, 0.95, 0.04), mat('#FFFFFF')); leg.position.set(m * 0.18, 0.44, 0.12); leg.rotation.z = m * 0.2; g.add(leg); });
       place(g, 51.5033, -0.1196, -0.4); keep(51.5033, -0.1196, 0.8); }
     { const g = new T.Group(); g.add(cone(0.3, 2.6, 4, '#CFE3F2', 0, 0, 0, Math.PI / 4)); place(g, 51.5045, -0.0865); keep(51.5045, -0.0865, 0.4); }
-    let bascules = [];
     { const g = new T.Group(), stone = '#E6D3A8', blue = '#7FB2E5';
       [-0.56, 0.56].forEach((z) => { g.add(box(0.2, 0.95, 0.22, stone, 0, 0, z)); [[-0.08, -0.09], [0.08, -0.09], [-0.08, 0.09], [0.08, 0.09]].forEach((c) => g.add(cone(0.035, 0.18, 4, stone, c[0], 0.95, z + c[1]))); g.add(cone(0.08, 0.22, 4, '#6E8FA8', 0, 0.95, z, Math.PI / 4)); });
       [-0.06, 0.06].forEach((x) => g.add(box(0.05, 0.06, 0.92, blue, x, 0.78, 0)));
@@ -443,6 +457,7 @@ Z.city = function (ctx, opts) {
     { const g = new T.Group(); g.add(cyl(0.07, 0.09, 1.6, 10, '#E9E4DA')); g.add(cyl(0.11, 0.11, 0.26, 12, '#9FB4BE', 0, 1.18)); g.add(cyl(0.012, 0.012, 0.3, 4, '#E9E4DA', 0, 1.6)); place(g, 51.5215, -0.1389); keep(51.5215, -0.1389, 0.3); }
     { const g = new T.Group(); g.add(box(0.72, 0.4, 0.46, '#C98A5E')); [[-0.33, -0.2], [0.33, -0.2], [-0.33, 0.2], [0.33, 0.2]].forEach((c) => g.add(cyl(0.045, 0.06, 0.72, 10, '#FFFDF8', c[0], 0.4, c[1]))); place(g, 51.4816, -0.1445, 0.3); keep(51.4816, -0.1445, 0.6); }
     { const g = new T.Group(); g.add(cyl(0.62, 0.56, 0.2, 28, '#F2EEE6')); const arch = new T.Mesh(new T.TorusGeometry(0.75, 0.035, 6, 36, Math.PI), mat('#FFFFFF')); arch.rotation.y = 0.6; arch.position.y = 0.1; g.add(arch); place(g, 51.556, -0.2796); keep(51.556, -0.2796, 0.9); }
+    }
 
     // houses and blocks, so the boroughs aren't empty
     const nearMark = (x, z) => marks.some((m) => Math.hypot(x - m[0], z - m[1]) < m[2]);
@@ -452,7 +467,7 @@ Z.city = function (ctx, opts) {
     const roofC = ['#E07A5F', '#7FB2E5', '#81B29A', '#F2CC8F', '#C98A5E'], wallC = ['#FFFDF8', '#FFF3E2', '#F7E9E1'];
     let hn = 0, guard = 0;
     while (hn < HN && guard++ < 20000) {
-      const rr = 3.5 + Math.pow(ctx.rnd(), 0.8) * 18, an = ctx.rnd() * 6.283, x = 1.5 + Math.cos(an) * rr, y = 0.3 + Math.sin(an) * rr * 0.8, h = ctx.topAt(x, y);
+      const rr = 3.5 + Math.pow(ctx.rnd(), 0.8) * 18, an = ctx.rnd() * 6.283, x = CX + Math.cos(an) * rr, y = CY + Math.sin(an) * rr * 0.8, h = ctx.topAt(x, y);
       if (h < 0 || ctx.nearRiver(x, -y, 0.3) || nearMark(x, -y)) continue;
       const s = 0.13 + ctx.rnd() * 0.08; Q.setFromAxisAngle(new T.Vector3(0, 1, 0), ctx.rnd() * 3);
       V3.set(x, h, -y); SC.set(s, s * 0.8, s * 1.2); M4.compose(V3, Q, SC); walls.setMatrixAt(hn, M4); walls.setColorAt(hn, COL.set(wallC[hn % 3]));
@@ -463,7 +478,7 @@ Z.city = function (ctx, opts) {
     const BN = 520, blocks = new T.InstancedMesh(hb, new T.MeshStandardMaterial({ roughness: 1, flatShading: true }), BN); blocks.castShadow = true; blocks.receiveShadow = true;
     let bn = 0; guard = 0;
     while (bn < BN && guard++ < 20000) {
-      const rr = Math.pow(ctx.rnd(), 1.3) * 4.6, an = ctx.rnd() * 6.283, x = 0.8 + Math.cos(an) * rr * 1.3, y = 0.6 + Math.sin(an) * rr * 0.8, h = ctx.topAt(x, y);
+      const rr = Math.pow(ctx.rnd(), 1.3) * 4.6, an = ctx.rnd() * 6.283, x = (london ? 0.8 : 0) + Math.cos(an) * rr * 1.3, y = (london ? 0.6 : 0) + Math.sin(an) * rr * 0.8, h = ctx.topAt(x, y);
       if (h < 0 || ctx.nearRiver(x, -y, 0.22) || nearMark(x, -y)) continue;
       const w = 0.14 + ctx.rnd() * 0.16; Q.setFromAxisAngle(new T.Vector3(0, 1, 0), ctx.rnd() * 0.4);
       V3.set(x, h, -y); SC.set(w, 0.15 + ctx.rnd() * 0.45 * Math.exp(-rr / 3), w * (0.8 + ctx.rnd() * 0.5)); M4.compose(V3, Q, SC); blocks.setMatrixAt(bn, M4); blocks.setColorAt(bn, COL.set(['#FFFDF8', '#F3EADF', '#EADFD6', '#E8EEF3'][bn % 4])); bn++;
@@ -472,7 +487,7 @@ Z.city = function (ctx, opts) {
 
     // roads
     const road = (pts, closed) => new T.CatmullRomCurve3(pts.map((p) => { const q = P(p[0], p[1]); return new T.Vector3(q[0], 0, -q[1]); }), !!closed, 'centripetal');
-    const routes = [
+    const routesLondon = () => [
       road([[51.5136, -0.2], [51.5154, -0.1755], [51.5165, -0.142], [51.517, -0.12], [51.515, -0.0985], [51.5134, -0.089], [51.5155, -0.07], [51.519, -0.059], [51.525, -0.033], [51.531, -0.005], [51.54, 0.03]]),
       road([[51.5134, -0.089], [51.526, -0.08], [51.546, -0.076], [51.57, -0.072], [51.595, -0.07], [51.62, -0.065]]),
       road([[51.5055, -0.088], [51.496, -0.087], [51.485, -0.065], [51.476, -0.04], [51.468, -0.01], [51.462, 0.03], [51.452, 0.08]]),
@@ -481,10 +496,21 @@ Z.city = function (ctx, opts) {
       road([[51.502, -0.15], [51.495, -0.19], [51.492, -0.23], [51.488, -0.28], [51.48, -0.33]]),
       road([[51.513, -0.06], [51.511, -0.03], [51.512, 0.01], [51.52, 0.06], [51.53, 0.11], [51.54, 0.16]])
     ];
-    const ringPts = []; for (let k = 0; k < 40; k++) { const a = k / 40 * 6.283; ringPts.push(new T.Vector3(1.2 + Math.cos(a) * 11, 0, -(0.6 + Math.sin(a) * 8.5))); }
+    // elsewhere: high streets out from the centre, each with a gentle wobble
+    const routesGen = () => {
+      const out = [], n = 6, a0 = ctx.rnd() * 6.283;
+      for (let k = 0; k < n; k++) {
+        const a = a0 + (k / n) * 6.283 + (ctx.rnd() - 0.5) * 0.5, bend = (ctx.rnd() - 0.5) * 0.5, pts = [];
+        for (let r = 0.6; r <= 17; r += 2.4) { const b = a + bend * (r / 17); pts.push(new T.Vector3(Math.cos(b) * r, 0, -Math.sin(b) * r * 0.85)); }
+        out.push(new T.CatmullRomCurve3(pts, false, 'centripetal'));
+      }
+      return out;
+    };
+    const routes = london ? routesLondon() : routesGen();
+    const ringPts = []; for (let k = 0; k < 40; k++) { const a = k / 40 * 6.283; ringPts.push(new T.Vector3((london ? 1.2 : 0) + Math.cos(a) * (london ? 11 : 9.5), 0, -((london ? 0.6 : 0) + Math.sin(a) * 8.5))); }
     const ringRoad = new T.CatmullRomCurve3(ringPts, true, 'centripetal');
     const bank = (side) => { const pts = []; for (let u = 0.2; u <= 0.8; u += 0.01) { const p = ctx.curve.getPointAt(u), tg = ctx.curve.getTangentAt(u), w = 0.32 + 0.55 * Math.pow(u, 1.8) + 0.3; pts.push(new T.Vector3(p.x - tg.z * w * side, 0, p.z + tg.x * w * side)); } return new T.CatmullRomCurve3(pts); };
-    const banks = [bank(1), bank(-1)];
+    const banks = ctx.curve ? [bank(1), bank(-1)] : [];
     const all = routes.concat([ringRoad], banks);
     const roadMat = new T.MeshLambertMaterial({ color: 0xD9C9B2 });
     all.forEach((cv, ri) => {
@@ -496,14 +522,14 @@ Z.city = function (ctx, opts) {
 
     // traffic: red buses, black cabs
     const bus = () => { const g = new T.Group(); g.add(box(0.13, 0.17, 0.36, '#E2353A')); g.add(box(0.135, 0.03, 0.33, '#3A2E2A', 0, 0.06)); g.add(box(0.135, 0.03, 0.33, '#3A2E2A', 0, 0.125)); g.add(box(0.13, 0.01, 0.36, '#FFFDF8', 0, 0.17)); return shadowy(g); };
-    const cab = () => { const g = new T.Group(); g.add(box(0.11, 0.065, 0.24, '#2A2A30')); g.add(box(0.1, 0.055, 0.13, '#2A2A30', 0, 0.065, -0.01)); g.add(box(0.105, 0.03, 0.11, '#9FB4BE', 0, 0.075, -0.01)); g.add(box(0.04, 0.02, 0.03, '#FFD84D', 0, 0.12, 0.01)); return shadowy(g); };
+    const cab = () => { const g = new T.Group(); const body = london ? '#2A2A30' : '#F2C230'; g.add(box(0.11, 0.065, 0.24, body)); g.add(box(0.1, 0.055, 0.13, body, 0, 0.065, -0.01)); g.add(box(0.105, 0.03, 0.11, '#9FB4BE', 0, 0.075, -0.01)); g.add(box(0.04, 0.02, 0.03, '#FFD84D', 0, 0.12, 0.01)); return shadowy(g); };
     const veh = [];
     all.forEach((cv, ri) => {
       const L = cv.getLength(), n = Math.max(2, Math.round(L / 3.2)), closed = ri === routes.length;
       for (let k = 0; k < n; k++) { const isBus = (k + ri) % 3 === 0, m = isBus ? bus() : cab(); S.add(m); veh.push({ m, cv, closed, u: (k / n + ctx.rnd() * 0.05) % 1, sp: (isBus ? 0.55 : 0.9) / L * ((k % 2) ? 1 : -1) }); }
     });
     const boatG = () => { const g = new T.Group(); g.add(box(0.16, 0.06, 0.5, '#FFFDF8')); g.add(box(0.12, 0.08, 0.22, '#7FB2E5', 0, 0.06, -0.04)); g.add(box(0.13, 0.015, 0.24, '#E2353A', 0, 0.14, -0.04)); return shadowy(g); };
-    const boats = []; for (let k = 0; k < 8; k++) { const m = boatG(); S.add(m); boats.push({ m, u: 0.12 + k / 8 * 0.76, sp: (k % 2 ? 1 : -1) * 0.012, off: k % 2 ? 0.12 : -0.12 }); }
+    const boats = []; for (let k = 0; k < (ctx.curve ? 8 : 0); k++) { const m = boatG(); S.add(m); boats.push({ m, u: 0.12 + k / 8 * 0.76, sp: (k % 2 ? 1 : -1) * 0.012, off: k % 2 ? 0.12 : -0.12 }); }
 
     // birds and paper clouds
     const wingG = new T.BufferGeometry(); wingG.setAttribute('position', new T.Float32BufferAttribute([0, 0, -0.05, 0.22, 0, 0.02, 0, 0, 0.06], 3)); wingG.computeVertexNormals();

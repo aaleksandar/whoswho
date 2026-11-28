@@ -179,3 +179,50 @@ main {
   .ld-create form, .ld-done { padding: 24px 18px 22px; }
   .ld-slug span { font-size: 13px; padding-left: 10px; }
 }
+
+/* --------------------------------------------------------------- city */
+.ld-city { position: relative; display: flex; gap: 8px; }
+.ld-city input { flex: 1; min-width: 0; }
+.ld-near {
+  flex: none;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 2px solid #E2D3BD;
+  border-radius: 12px;
+  background: var(--paper-2);
+  font: 700 15px var(--body);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ld-near:hover { border-color: var(--ink); }
+.ld-near:disabled { opacity: 0.6; cursor: progress; }
+.city-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(60, 35, 15, 0.18);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.city-opt { display: flex; gap: 8px; align-items: baseline; padding: 10px 10px; border-radius: 8px; cursor: pointer; }
+.city-opt b { font: 700 16px var(--body); }
+.city-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 14px var(--body); color: var(--brown); }
+.city-opt:hover, .city-opt.on { background: var(--paper-2); }
+.city-alt {
+  margin-left: 4px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--paper-2);
+  font: 700 13px var(--body);
+  color: var(--ink);
+  cursor: pointer;
+}

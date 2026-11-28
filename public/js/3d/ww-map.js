@@ -1,6 +1,6 @@
-// Shared 3D London base for the WhosWho map.
+// Shared 3D paper-city base for the WhosWho map (London, or a generated city).
 // WWMap(canvas, opts) builds boroughs, river, optional buildings/trees, camera tour, picking and label projection.
-// opts.boroughs / opts.thames come from /data/london-3d.json; guests arrive via setGuests([{key, x, y, ...}]).
+// opts.boroughs / opts.thames come from /data/london-3d.json (or gen-city.js, with no river); guests arrive via setGuests([{key, x, y, ...}]).
 (function () {
   window.WWMap = function (canvas, o) {
     var T = window.THREE, W = { boroughs: o.boroughs, thames: o.thames }, th = o.theme;
@@ -66,19 +66,23 @@
     };
     var topAt = function (x, y) { for (var i = 0; i < rings.length; i++) if (inRing(rings[i], x, y)) return ringTop[i]; return -1; };
 
-    var curve = new T.CatmullRomCurve3(W.thames.map(function (p) { return new T.Vector3(p[0], 0, -p[1]); }), false, 'centripetal');
-    var N = 440, pos = [], idx = [], samples = [], ry = maxTop + 0.025;
-    for (var i = 0; i <= N; i++) {
-      var u = i / N, p = curve.getPointAt(u), tg = curve.getTangentAt(u);
-      var nx = -tg.z, nz = tg.x, w = (th.riverW || 0.24) + 0.55 * Math.pow(u, 1.8);
-      pos.push(p.x + nx * w, ry, p.z + nz * w, p.x - nx * w, ry, p.z - nz * w);
-      samples.push([p.x, p.z, w]);
-      if (i < N) { var a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    // the river (London's Thames); a generated city has none
+    var curve = null, samples = [];
+    if (W.thames && W.thames.length > 1) {
+      curve = new T.CatmullRomCurve3(W.thames.map(function (p) { return new T.Vector3(p[0], 0, -p[1]); }), false, 'centripetal');
+      var N = 440, pos = [], idx = [], ry = maxTop + 0.025;
+      for (var i = 0; i <= N; i++) {
+        var u = i / N, p = curve.getPointAt(u), tg = curve.getTangentAt(u);
+        var nx = -tg.z, nz = tg.x, w = (th.riverW || 0.24) + 0.55 * Math.pow(u, 1.8);
+        pos.push(p.x + nx * w, ry, p.z + nz * w, p.x - nx * w, ry, p.z - nz * w);
+        samples.push([p.x, p.z, w]);
+        if (i < N) { var a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+      var rg = new T.BufferGeometry();
+      rg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); rg.setIndex(idx); rg.computeVertexNormals();
+      var riverMat = th.riverMat ? th.riverMat(T) : new T.MeshStandardMaterial({ color: th.river, roughness: 0.25, emissive: th.river, emissiveIntensity: th.riverEmis || 0.08, side: T.DoubleSide });
+      var river = new T.Mesh(rg, riverMat); river.receiveShadow = true; scene.add(river);
     }
-    var rg = new T.BufferGeometry();
-    rg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); rg.setIndex(idx); rg.computeVertexNormals();
-    var riverMat = th.riverMat ? th.riverMat(T) : new T.MeshStandardMaterial({ color: th.river, roughness: 0.25, emissive: th.river, emissiveIntensity: th.riverEmis || 0.08, side: T.DoubleSide });
-    var river = new T.Mesh(rg, riverMat); river.receiveShadow = true; scene.add(river);
     var nearRiver = function (x, z, pad) { for (var s = 0; s < samples.length; s++) { var q = samples[s], dx = q[0] - x, dz = q[1] - z; if (dx * dx + dz * dz < (q[2] + pad) * (q[2] + pad)) return true; } return false; };
 
     var ctx = { T: T, scene: scene, TOP: TOP, maxTop: maxTop, topAt: topAt, rnd: rnd, cam: cam, nearRiver: nearRiver, curve: curve, renderer: r, sun: sun, hemi: hemi, target: new T.Vector3() };

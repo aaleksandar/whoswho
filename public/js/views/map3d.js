@@ -1,17 +1,21 @@
-// The Map: a 3D zoo over paper London. Every guest is a spirit animal hopping
-// on their postcode district. The tour is about the people: each card shows the
+// The Map: a 3D zoo over the party's paper city (hand-made London, or one
+// generated for anywhere else). Every guest is a spirit animal hopping on their
+// neighbourhood. The tour is about the people: each card shows the
 // fun things they said about themselves, big enough to read across the room.
 
 import { h } from '../dom.js';
 import { PALETTE, animalLabel } from '../animals.js';
-import { project } from '../geo.js';
+import { projector } from '../geo.js';
+import { DEFAULT_CITY, isLondon, distanceKm } from '../city.js';
 
 const RIVER = ['Richmond upon Thames', 'Kingston upon Thames', 'Hounslow', 'Hammersmith and Fulham', 'Wandsworth', 'Kensington and Chelsea', 'Westminster', 'Lambeth', 'City of London', 'Southwark', 'Tower Hamlets', 'Greenwich', 'Newham', 'Barking and Dagenham', 'Bexley', 'Havering', 'Lewisham'];
 const PAPER = ['#F2D3A8', '#EDB9A0', '#BFDCB0', '#B5CDE8', '#EFCB7E', '#D9B6DC', '#F5C7A3'];
 const TOUR_MS = 7000;
 const HOLD_MS = 15000; // after someone taps an animal (or a new guest lands)
 const READ_MS = 14000; // time on a guest who said something: long enough to read it
-const WIDE_EVERY = 6; // a wide shot of London between every few guests
+const WIDE_EVERY = 6; // a wide shot of the whole city between every few guests
+// Guests further out than this (say, placed before the host changed city) aren't on the map.
+const ON_MAP_KM = 45;
 const MAX_FACTS = 3;
 const WEATHER_MS = 50000; // each spell of weather
 // The room's mood sets the weather, the same way it does in the Cloud.
@@ -78,8 +82,12 @@ function spread(gs) {
 // /home?weather=snow holds one kind of weather (handy for trying them out)
 const PINNED = new URLSearchParams(location.search).get('weather');
 
-export function createMapView(root, { geo, onInteract }) {
-  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': 'Paper pop-up model of London with landmarks, parks and traffic, and a hopping spirit animal for each guest' });
+export function createMapView(root, { geo, city = DEFAULT_CITY, onInteract }) {
+  const london = isLondon(city);
+  const project = projector(city);
+  const centre = london ? DEFAULT_CITY : city; // paper London is centred on Charing Cross
+  const onMap = (g) => g.lat != null && distanceKm(centre, g) < ON_MAP_KM;
+  const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': `Paper pop-up model of ${city.name} with parks and traffic, and a hopping spirit animal for each guest` });
   const pinsEl = h('div.mz-pins', { 'aria-hidden': 'true' });
   const lead = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   for (const [k, v] of Object.entries({ x1: 0, y1: 0, x2: 0, y2: 0, stroke: '#C2553A', 'stroke-width': 3, 'stroke-dasharray': '10 8', 'stroke-linecap': 'round', opacity: 0 })) lead.setAttribute(k, v);
@@ -100,7 +108,7 @@ export function createMapView(root, { geo, onInteract }) {
   root.append(
     canvas, tint, pinsEl, leadSvg, card, flashEl,
     h('header.mz-top',
-      h('div.paper-plate', titleEl, h('p', 'the zoo has come to London'), wxEl),
+      h('div.paper-plate', titleEl, h('p', `the zoo has come to ${city.name}`), wxEl),
       h('div.mz-stats',
         h('div.paper-stat', guestStat, h('span', 'animals in town')),
         h('div.paper-stat', factStat, h('span', 'fun things said'))),
@@ -153,11 +161,12 @@ export function createMapView(root, { geo, onInteract }) {
     lastKind = kind;
     weatherAt = Date.now();
     life?.setWeather(kind);
-    const [label, color] = WEATHER[kind];
+    let [label, color] = WEATHER[kind];
+    if (kind === 'fog' && !london) label = 'Thick fog'; // pea-soupers are London's
     tint.style.backgroundColor = color;
     wxEl.textContent = n
-      ? `${label} over London, brought on by ${n} fun ${n === 1 ? 'thing' : 'things'} said tonight`
-      : `${label} over London`;
+      ? `${label} over ${city.name}, brought on by ${n} fun ${n === 1 ? 'thing' : 'things'} said tonight`
+      : `${label} over ${city.name}`;
   }
 
   function boot() {
@@ -169,7 +178,7 @@ export function createMapView(root, { geo, onInteract }) {
       thames: geo.thames,
       theme: {
         fog: 0xF1E0C6, fogNear: 70, fogFar: 170, ground: 0xEAD7BA,
-        heights: (bi, n) => (RIVER.includes(n) ? 0.6 : 0.3 + ((bi * 37) % 4) * 0.075), bevel: 0, inset: 0.99,
+        heights: (bi, n) => (london && RIVER.includes(n) ? 0.6 : 0.3 + ((bi * 37) % 4) * 0.075), bevel: 0, inset: 0.99,
         bor: PAPER,
         borColor: (bi) => PAPER[(bi * 3) % 7],
         borMat: (T, c) => new T.MeshLambertMaterial({ color: new T.Color(c) }),
@@ -178,13 +187,13 @@ export function createMapView(root, { geo, onInteract }) {
         shadowBounds: 24, shadowSize: 4096,
         hemi: [0xFFF4E4, 0xB89A74, 0.5], sun: [0xFFF1DD, 0.72],
       },
-      cam: { wide: { r: 23, phi: 0.82, tx: 1.0, tz: -0.8 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
+      cam: { wide: { r: 23, phi: 0.82, tx: london ? 1.0 : 0, tz: london ? -0.8 : 0 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
       labelScale: 24,
       marker: (ctx, g, i, at, delay) => Z3.marker(ctx, g, i, at, g.c1, { delay }),
       extras: (ctx) => {
-        const city = Z.city(ctx, { traffic: () => true, clouds: () => true });
+        const town = Z.city(ctx, { traffic: () => true, clouds: () => true, london });
         life = window.WWLife ? window.WWLife.create(ctx, { onFlash }) : null;
-        return { update: (t, dt, f) => { city.update?.(t, dt, f); life?.update(t, dt, f); } };
+        return { update: (t, dt, f) => { town.update?.(t, dt, f); life?.update(t, dt, f); } };
       },
       input: root,
       getFocus: () => focus,
@@ -214,7 +223,7 @@ export function createMapView(root, { geo, onInteract }) {
     const facts = secrets.filter((s) => s.aboutId === g.id);
     const shown = facts.slice(-MAX_FACTS).reverse();
     card.replaceChildren(
-      h('span.mz-kind', [g.code, g.area].filter(Boolean).join(' · ') || 'London'),
+      h('span.mz-kind', [g.code, g.area].filter(Boolean).join(' · ') || city.name),
       h('h2', `${g.name}, the ${animalLabel(g.animal).toLowerCase()}`),
       h('p.mz-sub', facts.length === 0 ? 'Hasn’t said anything fun yet' : facts.length === 1 ? 'Something fun about them' : `${facts.length} fun things about them`),
       ...(shown.length
@@ -229,7 +238,7 @@ export function createMapView(root, { geo, onInteract }) {
     const g = guests[focus];
     const dwell = g && secrets.some((x) => x.aboutId === g.id) ? READ_MS : 0;
     if (Date.now() - focusedAt < dwell) return;
-    // the odd wide shot, so the room sees the whole of London
+    // the odd wide shot, so the room sees the whole city
     const seq = [];
     guests.forEach((_, i) => { if (i % WIDE_EVERY === 0) seq.push(-1); seq.push(i); });
     tourAt = (tourAt + 1) % seq.length;
@@ -237,12 +246,12 @@ export function createMapView(root, { geo, onInteract }) {
   }
 
   return {
-    hasData: ({ guests: list }) => list.some((g) => g.lat != null),
+    hasData: ({ guests: list }) => list.some(onMap),
 
     update({ guests: list, secrets: s }) {
       const prevId = guests[focus]?.id;
       guests = list
-        .filter((g) => g.lat != null)
+        .filter(onMap)
         .map((g) => {
           const [x, y] = project(g.lat, g.lng);
           return { ...g, ...g.avatar, x, y, c1: PALETTE[g.avatar.color][0], code: g.outcode, key: `${g.id}:${g.avatar.animal}:${g.avatar.color}` };

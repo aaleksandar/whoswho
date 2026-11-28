@@ -396,3 +396,27 @@ body.admin {
 .ad-wishes { display: grid; gap: 6px; margin: 4px 0 14px; }
 .ad-wishes .ad-label { font-size: 13px; font-weight: 600; }
 .ad-wish { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 8px; background: rgba(127, 127, 127, 0.1); font-size: 14px; }
+
+/* ---- city picker ---- */
+.ad-city { position: relative; display: grid; gap: 6px; }
+.ad-city-row { position: relative; display: flex; gap: 8px; }
+.ad-city-row input { flex: 1; min-width: 0; }
+.ad-city .city-list {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: #17131f;
+  border: 1px solid #3a3150;
+  border-radius: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.ad-city .city-opt { display: flex; gap: 8px; align-items: baseline; padding: 8px; border-radius: 6px; cursor: pointer; }
+.ad-city .city-opt span { color: #7d7590; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-city .city-opt:hover, .ad-city .city-opt.on { background: #262033; }
+.ad-city .city-alt { margin-left: 6px; background: #262033; color: #cfc8dc; border: 0; border-radius: 999px; padding: 2px 8px; cursor: pointer; }

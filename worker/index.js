@@ -1,7 +1,7 @@
 // whoswho on Cloudflare: anyone can start a party at whoswho.hypermaps.world/<name>.
 //
 //   /                      landing page (pages/landing.html): what it is, and "create your party"
-//   POST /api/parties      create one: {slug, title, password}
+//   POST /api/parties      create one: {slug, title, password, city}
 //   GET  /api/parties/:slug  {available}
 //   /<slug>/…              that party: its display, phone page, admin and API
 //
@@ -15,6 +15,7 @@ import { createStore, DEFAULT_SETTINGS } from '../src/db.js';
 import { createHandler } from '../src/app.js';
 import { hashPassword, hashVerifier } from '../src/auth.js';
 import { durableDriver } from './sqlite-driver.js';
+import { cleanCity, DEFAULT_CITY } from '../public/js/city.js';
 import home from '../pages/home.html';
 import hi from '../pages/hi.html';
 import hax0r from '../pages/hax0r.html';
@@ -79,7 +80,7 @@ export class Party extends DurableObject {
     });
   }
 
-  async create({ slug, title, password }) {
+  async create({ slug, title, password, city }) {
     if (this.meta) return json({ error: 'That address is taken, try another', field: 'slug' }, 409);
     const { salt, hash } = await hashPassword(password);
     if (this.readMeta()) return json({ error: 'That address is taken, try another', field: 'slug' }, 409); // lost a race
@@ -90,8 +91,8 @@ export class Party extends DurableObject {
     });
     this.meta = this.readMeta();
     this.boot();
-    this.db.updateSettings({ title });
-    return json({ slug, title }, 201);
+    this.db.updateSettings({ title, city: city || DEFAULT_CITY });
+    return json({ slug, title, city: this.db.getSettings().city }, 201);
   }
 
   async fetch(request) {
@@ -118,7 +119,9 @@ async function createParty(request, env) {
   if (bad) return json({ error: bad, field: 'slug' }, 400);
   if (!title) return json({ error: 'Give your party a name', field: 'title' }, 400);
   if (password.length < 6) return json({ error: 'Use at least 6 characters', field: 'password' }, 400);
-  return party(env, slug).fetch(`${INTERNAL}/create`, { method: 'POST', body: JSON.stringify({ slug, title, password }) });
+  const city = cleanCity(body?.city);
+  if (!city) return json({ error: 'Pick your city from the list', field: 'city' }, 400);
+  return party(env, slug).fetch(`${INTERNAL}/create`, { method: 'POST', body: JSON.stringify({ slug, title, password, city }) });
 }
 
 export default {

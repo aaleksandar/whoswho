@@ -1,4 +1,4 @@
-// Phone: join (name, postcode, spirit animal) → say fun things about yourself
+// Phone: join (name, neighbourhood, spirit animal) → say fun things about yourself
 // and send wishes, as often as you like. The phone remembers who it is with a
 // token from the server.
 
@@ -6,6 +6,7 @@ import { h, $, debounce } from './dom.js';
 import { api, ROOT } from './api.js';
 import { ANIMALS, PALETTE, COLORS, animalLabel } from './animals.js';
 import { sticker } from './sticker.js';
+import { isLondon } from './city.js';
 
 // One phone can be at several parties on the same site: a token per party.
 const KEY = ROOT ? `whoswho.token:${ROOT}` : 'whoswho.token';
@@ -24,6 +25,10 @@ const store = {
 };
 
 let token = store.get();
+// The party's city decides what we ask for: a postcode in London (looked up
+// offline), a neighbourhood anywhere else.
+let city = null;
+const cityReady = api('GET', '/api/settings').then((s) => { city = s.city; }).catch(() => {});
 let me = null;
 // Drop-screen draft survives switching tabs and coming back from "sent".
 const draft = { mode: 'fun', text: '', wish: '' };
@@ -59,7 +64,7 @@ function bar() {
     me
       ? h('button.me', { type: 'button', title: 'Not you? Join as someone else', onclick: notMe },
         h('i', { style: { background: PALETTE[me.avatar.color][0] } }, stickerFor(me.avatar.animal)),
-        me.name, me.outcode ? ` · ${me.outcode}` : '')
+        me.name, me.outcode || me.area ? ` · ${me.outcode || me.area}` : '')
       : null,
   );
 }
@@ -76,8 +81,20 @@ function notMe() {
 function showJoin() {
   const pick = { animal: ANIMALS[Math.floor(Math.random() * ANIMALS.length)], color: COLORS[Math.floor(Math.random() * COLORS.length)] };
   const name = h('input.inp#nm', { type: 'text', autocomplete: 'nickname', maxlength: 40, placeholder: 'What do people call you?', required: true });
-  const pc = h('input.inp#pc', { type: 'text', autocomplete: 'postal-code', maxlength: 10, placeholder: 'E8, SW4, N16…', autocapitalize: 'characters' });
-  const pcHelp = h('p.help', 'Just the first half is fine. We pin the district, never your street.');
+  const pc = h('input.inp#pc', { type: 'text', autocomplete: 'off', maxlength: 60, placeholder: 'E8, SW4, Peckham…' });
+  const pcLabel = h('label', { for: 'pc' }, 'Postcode or neighbourhood');
+  const lede = h('p.lede', 'Takes ten seconds. Your spirit animal pops up on the big map.');
+  const london = () => !city || isLondon(city);
+  const PC_HINT = () => (london()
+    ? 'A postcode (just the first half is fine) or your neighbourhood. We pin the district, never your street.'
+    : `Your neighbourhood, or a postcode. We pin the area, never your street.`);
+  const pcHelp = h('p.help', PC_HINT());
+  cityReady.then(() => {
+    if (!city) return;
+    lede.textContent = `Takes ten seconds. Your spirit animal pops up on the big map of ${city.name}.`;
+    if (!london()) { pcLabel.textContent = 'Your neighbourhood'; pc.placeholder = 'Where in town do you live?'; }
+    if (!pc.value) { pcHelp.textContent = PC_HINT(); pcHelp.className = 'help'; }
+  });
   const err = h('p.err', { role: 'alert' });
   const go = h('button.go', { type: 'submit' }, 'Join the zoo');
   const grid = h('div.zoo', { role: 'radiogroup', 'aria-label': 'Spirit animal' });
@@ -118,14 +135,14 @@ function showJoin() {
 
   const checkPc = debounce(async () => {
     const v = pc.value.trim();
-    if (!v) { pcHelp.textContent = 'Just the first half is fine. We pin the district, never your street.'; pcHelp.className = 'help'; return; }
+    if (!v) { pcHelp.textContent = PC_HINT(); pcHelp.className = 'help'; return; }
     try {
-      const r = await api('GET', `/api/postcode/${encodeURIComponent(v)}`);
-      if (!r.valid) { pcHelp.textContent = 'That doesn’t look like a UK postcode.'; pcHelp.className = 'help warn'; }
-      else if (!r.known) { pcHelp.textContent = `${r.outcode} isn’t on our London map, but you can still join the cloud.`; pcHelp.className = 'help warn'; }
-      else { pcHelp.textContent = `${r.outcode} · ${r.area}. Your animal lands here.`; pcHelp.className = 'help ok'; }
+      const r = await api('GET', `/api/place?q=${encodeURIComponent(v)}`);
+      if (pc.value.trim() !== v) return; // they kept typing
+      if (!r.known) { pcHelp.textContent = `We can’t find that in ${r.city}, but you can still join the cloud. Try a nearby neighbourhood?`; pcHelp.className = 'help warn'; }
+      else { pcHelp.textContent = `${[r.outcode, r.area].filter(Boolean).join(' · ')}. Your animal lands here.`; pcHelp.className = 'help ok'; }
     } catch { /* offline for a moment: no hint */ }
-  }, 300);
+  }, 500);
   pc.addEventListener('input', checkPc);
 
   const form = h('form', {
@@ -147,9 +164,9 @@ function showJoin() {
     },
   },
   h('h1', 'Join the ', h('span', 'zoo')),
-  h('p.lede', 'Takes ten seconds. Your spirit animal pops up on the big map of London.'),
+  lede,
   h('div.field', h('label', { for: 'nm' }, 'Your name'), name),
-  h('div.field', h('label', { for: 'pc' }, 'Postcode'), pc, pcHelp),
+  h('div.field', pcLabel, pc, pcHelp),
   h('div.field', h('label', 'Your spirit animal'), preview, grid),
   h('div.field', h('label', 'Token colour'), swatches),
   err,

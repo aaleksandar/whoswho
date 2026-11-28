@@ -18,9 +18,9 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 /**
  * Node: static files from public/, everything else through the same handler
  * the Cloudflare Worker runs (src/app.js).
- * @param {{db: ReturnType<typeof openDb>, getPort: () => number, adminPassword?: string}} opts
+ * @param {{db: ReturnType<typeof openDb>, getPort: () => number, adminPassword?: string, geocodeFetch?: typeof fetch}} opts
  */
-export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSWORD }) {
+export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSWORD, geocodeFetch }) {
   // Where other devices should go. PUBLIC_URL wins; otherwise, a request that
   // came through a tunnel or proxy (Cloudflare, ngrok…) uses that public
   // address, so the QR works from outside the network; else the LAN address.
@@ -38,6 +38,7 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
     baseUrl,
     info: () => ({ host: lanHost(), port: getPort() }),
     page: (name) => fs.readFile(path.join(ROOT, 'pages', `${name}.html`), 'utf8'),
+    geocodeFetch,
   });
 
   const app = express();

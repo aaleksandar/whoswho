@@ -3,10 +3,18 @@ import assert from 'node:assert/strict';
 import { openDb } from '../src/node-db.js';
 import { createApp } from '../server.js';
 
+// Tests never reach the real geocoder: by default it finds nothing.
+const fakeGeocoder = (features = []) => {
+  const calls = [];
+  const f = async (url) => { calls.push(new URL(url)); return new Response(JSON.stringify({ features: typeof features === 'function' ? features(new URL(url)) : features })); };
+  f.calls = calls;
+  return f;
+};
+
 async function start(opts = {}) {
   const db = openDb(':memory:');
   let port = 0;
-  const app = createApp({ db, getPort: () => port, ...opts });
+  const app = createApp({ db, getPort: () => port, geocodeFetch: fakeGeocoder(), ...opts });
   const server = await new Promise((r) => {
     const s = app.listen(0, '127.0.0.1', () => r(s));
   });
@@ -163,8 +171,9 @@ describe('API (open admin)', () => {
     assert.equal(def.json.rotateSeconds, 40);
     assert.deepEqual(def.json.views, ['map', 'cloud', 'wishes']);
     const r = await s.call('PUT', '/api/settings', { rotateSeconds: 7, views: ['wishes', 'map', 'bogus'], title: 'Party' });
-    assert.deepEqual(r.json, { title: 'Party', rotateSeconds: 7, views: ['map', 'wishes'] });
+    assert.deepEqual(r.json, { title: 'Party', rotateSeconds: 7, views: ['map', 'wishes'], city: def.json.city });
     assert.deepEqual((await s.call('GET', '/api/settings')).json, r.json);
+    assert.equal(def.json.city.name, 'London'); // parties from before cities are in London
   });
 
   test('postcode check, info and QR', async () => {
@@ -345,4 +354,83 @@ test('wishes: as many lanterns as you like, moderated one by one', async (t) => 
   assert.equal((await s.call('GET', '/api/wishes')).json.length, 2);
   await s.call('DELETE', `/api/admin/guests/${guest.id}`);
   assert.equal((await s.call('GET', '/api/wishes')).json.length, 0);
+});
+
+describe('a party in another city', () => {
+  const BERLIN = { name: 'Berlin', region: 'Berlin', country: 'Germany', cc: 'DE', lat: 52.524, lng: 13.411 };
+  const kreuzberg = { geometry: { coordinates: [13.4119, 52.4976] }, properties: { osm_key: 'place', osm_value: 'suburb', type: 'district', name: 'Kreuzberg' } };
+  const street = { geometry: { coordinates: [13.41873, 52.50119] }, properties: { osm_key: 'highway', type: 'street', name: 'Oranienstraße', district: 'Kreuzberg' } };
+  const potsdamArt = { geometry: { coordinates: [13.0262, 52.3955] }, properties: { osm_key: 'tourism', type: 'house', name: 'Paris' } };
+  const munich = { geometry: { coordinates: [11.575, 48.137] }, properties: { osm_key: 'place', type: 'city', name: 'Munich' } };
+  const byQuery = { Kreuzberg: [kreuzberg], 'Oranienstraße 25': [street], Paris: [potsdamArt], Munich: [munich] };
+  let s;
+  let geo;
+  before(async () => {
+    geo = fakeGeocoder((url) => byQuery[url.searchParams.get('q')] || []);
+    s = await start({ adminPassword: '', geocodeFetch: geo });
+  });
+  after(() => s.stop());
+
+  test('the city is a setting, validated', async () => {
+    const r = await s.call('PUT', '/api/settings', { city: { ...BERLIN, lat: '52.524' } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.city, BERLIN);
+    assert.equal((await s.call('PUT', '/api/settings', { city: { name: 'Nowhere' } })).json.field, 'city');
+    assert.equal((await s.call('PUT', '/api/settings', { city: { name: 'X', lat: 99, lng: 0 } })).status, 400);
+    assert.match((await s.call('GET', '/hi')).text, /3D map of Berlin/);
+  });
+
+  test('guests are placed by neighbourhood, near the city, never at their street', async () => {
+    const a = (await s.call('POST', '/api/guests', { name: 'Ana', postcode: 'Kreuzberg' })).json.guest;
+    assert.equal(a.area, 'Kreuzberg');
+    assert.equal(a.outcode, null);
+    assert.ok(Math.abs(a.lat - 52.4976) < 0.01 && Math.abs(a.lng - 13.4119) < 0.01, 'jittered around the district');
+    const url = geo.calls.at(-1);
+    assert.equal(url.searchParams.get('lat'), '52.524', 'biased to the party city');
+    assert.ok(!url.search.includes('Ana'), 'only the place is sent');
+
+    // a street address shows as its district, snapped to a ~500 m grid before jitter
+    const b = (await s.call('POST', '/api/guests', { name: 'Ben', postcode: 'Oranienstraße 25' })).json.guest;
+    assert.equal(b.area, 'Kreuzberg');
+    assert.ok(!JSON.stringify((await s.call('GET', '/api/guests')).json).includes('Oranien'), 'what was typed stays private');
+    assert.equal((await s.call('GET', '/api/admin/guests')).json.find((g) => g.id === b.id).postcode, 'Oranienstraße 25');
+
+    // too far away, or not a place (an artwork called Paris): joins without a spot on the map
+    for (const q of ['Munich', 'Paris', 'Atlantis']) {
+      const g = (await s.call('POST', '/api/guests', { name: q, postcode: q })).json.guest;
+      assert.equal(g.lat, null, q);
+    }
+  });
+
+  test('live hint, and an unchanged edit keeps the spot', async () => {
+    assert.deepEqual((await s.call('GET', '/api/place?q=Kreuzberg')).json, { known: true, area: 'Kreuzberg', outcode: null, city: 'Berlin' });
+    assert.equal((await s.call('GET', '/api/place?q=Atlantis')).json.known, false);
+    const g = (await s.call('POST', '/api/guests', { name: 'Cem', postcode: 'Kreuzberg' })).json.guest;
+    const n = geo.calls.length;
+    const upd = (await s.call('PUT', `/api/admin/guests/${g.id}`, { name: 'Cem K', postcode: ' kreuzberg ' })).json;
+    assert.equal(geo.calls.length, n, 'no new lookup');
+    assert.deepEqual([upd.lat, upd.lng], [g.lat, g.lng]);
+  });
+
+  test('a geocoder that is down still lets people join', async (t) => {
+    const down = await start({ adminPassword: '', geocodeFetch: async () => { throw new Error('offline'); } });
+    t.after(() => down.stop());
+    await down.call('PUT', '/api/settings', { city: BERLIN });
+    const r = await down.call('POST', '/api/guests', { name: 'Off', postcode: 'Mitte' });
+    assert.equal(r.status, 201);
+    assert.equal(r.json.guest.lat, null);
+  });
+});
+
+test('in London, postcodes stay offline and neighbourhood names are looked up', async (t) => {
+  const geo = fakeGeocoder([{ geometry: { coordinates: [-0.0699, 51.4734] }, properties: { osm_key: 'place', type: 'district', name: 'Peckham' } }]);
+  const s = await start({ adminPassword: '', geocodeFetch: geo });
+  t.after(() => s.stop());
+  const e8 = (await s.call('POST', '/api/guests', { name: 'Eve', postcode: 'e8 3pb' })).json.guest;
+  assert.equal(e8.outcode, 'E8');
+  assert.equal(geo.calls.length, 0);
+  const pk = (await s.call('POST', '/api/guests', { name: 'Pat', postcode: 'Peckham' })).json.guest;
+  assert.equal(pk.area, 'Peckham');
+  assert.equal(pk.outcode, null);
+  assert.equal(geo.calls.length, 1);
 });

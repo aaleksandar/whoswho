@@ -1,7 +1,7 @@
 {
   "name": "whoswho",
   "version": "1.0.0",
-  "description": "Party board: a 3D zoo map of London, a cloud of fun things and wish lanterns, with QR registration. Runs on a laptop or on Cloudflare Workers.",
+  "description": "Party board: a 3D zoo map of your city, a cloud of fun things and wish lanterns, with QR registration. Runs on a laptop or on Cloudflare Workers.",
   "type": "module",
   "private": true,
   "main": "server.js",
@@ -14,6 +14,7 @@
     "test": "node --test \"test/*.test.js\"",
     "build:data": "node scripts/build-data.mjs",
     "build:3d": "node scripts/build-3d.mjs",
+    "build:cities": "node scripts/build-cities.mjs",
     "seed": "node scripts/seed.mjs",
     "demo": "node scripts/demo.mjs",
     "deploy": "wrangler deploy",

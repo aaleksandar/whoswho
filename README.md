@@ -1,13 +1,22 @@
 # whoswho: who's here?
 
-A guest board for parties and meetups. Run it on your laptop for everyone on the local network, or create a party at **https://whoswho.hypermaps.world**: pick a name and a link (`whoswho.hypermaps.world/<your-party>`) and it's live.
+A guest board for parties and meetups. Run it on your laptop for everyone on the local network, or create a party at **https://whoswho.hypermaps.world**: pick a name, your city and a link (`whoswho.hypermaps.world/<your-party>`) and it's live.
 
 - **`/home`** is the big-screen display. It rotates between three 3D/paper screens, with a QR code in the corner pointing to `/hi`:
-  - **The Map:** a paper pop-up model of London (landmarks, parks, buses, cabs, boats) where every guest is a 3D spirit animal hopping on their postcode district. The camera tours from person to person, and a big card shows the fun things each of them said about themselves. The animals have a life of their own: they dance, nap, flip and do laps of their spot on a long loop, hop over to visit their neighbours (hearts, notes and stars), and every couple of minutes a stadium wave rolls across London. Guests who live on the same spot (closer than an animal is wide) form a crew: they stand in a ring instead of on top of each other, and every few seconds they face each other, groove in time and spin together while the music floats up. The weather changes every 50 seconds (sunshine, breeze, drizzle, snow, rainbows, fog, thunderstorms), led by the moods of what the room has said, the same way the Cloud picks its weather. In a thunderstorm the animals jump at every flash.
+  - **The Map:** a paper pop-up model of the party's city where every guest is a 3D spirit animal hopping on their neighbourhood. London is hand-made (boroughs, the Thames, landmarks, parks, buses, cabs, boats); any other city is generated from its name (paper districts, parks, high streets, a ring road and traffic), the same on every screen. The camera tours from person to person, and a big card shows the fun things each of them said about themselves. The animals have a life of their own: they dance, nap, flip and do laps of their spot on a long loop, hop over to visit their neighbours (hearts, notes and stars), and every couple of minutes a stadium wave rolls across the city. Guests who live on the same spot (closer than an animal is wide) form a crew: they stand in a ring instead of on top of each other, and every few seconds they face each other, groove in time and spin together while the music floats up. The weather changes every 50 seconds (sunshine, breeze, drizzle, snow, rainbows, fog, thunderstorms), led by the moods of what the room has said, the same way the Cloud picks its weather. In a thunderstorm the animals jump at every flash.
   - **The Cloud:** every fun thing guests say is an anonymous 3D cloud, and its words set its weather (see below). The sky colour and the "tonight's forecast" line follow the room's mood, One at a time, a cloud floats to the front and its words show big enough to read across the room.
   - **Wishes:** "what do you need in life right now?" Every wish rises as its own lantern over the night skyline, with the guest's name, so people who can help go and say hi. Guests can send as many as they like, and the lanterns keep rising on a loop.
-- **`/hi`** is for phones. Join with a name, a postcode and a spirit animal (66 to pick from), then **say something fun about you** and send **wishes**, as many as you like.
-- **`/hax0r`** is the admin page: edit or delete guests, delete individual lanterns, read and delete fun things (it shows who sent what), change display settings, reset the event.
+- **`/hi`** is for phones. Join with a name, a neighbourhood (or postcode) and a spirit animal (66 to pick from), then **say something fun about you** and send **wishes**, as many as you like.
+- **`/hax0r`** is the admin page: edit or delete guests, delete individual lanterns, read and delete fun things (it shows who sent what), change display settings and the city, reset the event.
+
+### Your city
+
+The host picks the party's city when creating it (type-ahead over ~11,600 towns and cities of 50,000+ people, bundled in `public/data/cities.json`; or **Near me**, which picks the nearest big city from the browser's location, worked out in the browser). If the page is already allowed to use the location, the city is filled in on load. It can be changed later in `/hax0r`; parties from before cities, and laptops, default to London. Changing it reloads the display; guests placed in the old city drop off the map until they're edited.
+
+Guests are placed by what they type:
+
+- **London:** a postcode resolves offline from the bundled district table. Anything else ("Peckham") goes to the geocoder.
+- **Anywhere else:** a neighbourhood, postcode or street goes to [Photon](https://photon.komoot.io) (OpenStreetMap data), biased to the city and kept within 30 km of it. Only the typed place is sent. Shops, pubs and the like are ignored, a street or address is snapped to a ~500 m grid and shown by its district's name, and the usual jitter is added. If nothing is found (or the geocoder can't be reached), the guest still joins, just without a spot on the map.
 
 Everything is stored in a single SQLite file, so a restart loses nothing. New guests, fun things and wishes reach the display instantly via Server-Sent Events, and the display jumps to show them: the Map flies to a new animal, or to the card of whoever just said something fun, and a new lantern rises from the rooftops. To stop it jumping around, it makes at most one jump every 25 seconds.
 
@@ -71,7 +80,7 @@ Open `https://<random>.trycloudflare.com/home` on the display. When a page is op
 
 The same app runs as a Cloudflare Worker, with no server of your own, and anyone can start a party there:
 
-- **`/`** is the landing page (`pages/landing.html`): what it is, and a short form (party name, link, admin password). `POST /api/parties {slug, title, password}` creates one; `GET /api/parties/:slug` says whether a link is free.
+- **`/`** is the landing page (`pages/landing.html`): what it is, and a short form (party name, link, admin password). `POST /api/parties {slug, title, password, city}` creates one; `GET /api/parties/:slug` says whether a link is free.
 - **`/<slug>/home`, `/<slug>/hi`, `/<slug>/hax0r`** and `/<slug>/api/…` are that party. Each party is its own Durable Object, named by its link, with its own guests, live connections and admin password (salted PBKDF2). Pages learn their party's path from a `whoswho-root` meta tag, so the browser code is the same as on a laptop.
 - Links from before parties (`/home`, `/hi`, `/hax0r`, `/api/…`) go to the first party, `/until-iam-back-party`.
 
@@ -111,7 +120,7 @@ The display draws on a fixed 1920×1080 stage scaled to the screen, so it looks 
 
 Every view can be explored by hand (mouse, trackpad or touch screen). Touching a view restarts its timer, and its own slideshow waits about 15 seconds before carrying on.
 
-**The Map:** tap an animal to see its card. Drag to turn London (drag up or down to tilt), scroll, pinch or use the `+`/`−` buttons to zoom toward that spot, and move around with two fingers (or right-drag / shift-drag). Left alone for 12 seconds, the camera drifts back to the tour.
+**The Map:** tap an animal to see its card. Drag to turn the city (drag up or down to tilt), scroll, pinch or use the `+`/`−` buttons to zoom toward that spot, and move around with two fingers (or right-drag / shift-drag). Left alone for 12 seconds, the camera drifts back to the tour.
 
 **The Cloud:** one fun thing at a time floats to the front for 9 seconds. Grab the card and throw it left for the next one (right for the previous); the cloud moves with it. Tapping the card, a two-finger swipe or the scroll wheel also flips. Tap any cloud in the sky to bring it forward; a new one jumps the queue.
 
@@ -119,14 +128,14 @@ Every view can be explored by hand (mouse, trackpad or touch screen). Touching a
 
 ## Privacy
 
-- **Location:** guests are placed at the **district** level only, e.g. `E8` (Hackney), with a small fixed offset so people don't stack. A full postcode is accepted but never shown. The public API (`/api/guests`) returns only the district; only the admin page sees what was typed.
+- **Location:** guests are placed at the **district** level only, e.g. `E8` (Hackney) or Kreuzberg, with a small fixed offset so people don't stack. A full postcode or address is accepted but never shown. The public API (`/api/guests`) returns only the district; only the admin page sees what was typed. Outside London, the typed place (and nothing about who typed it) is looked up with Photon.
 - **Fun things are public, with your name on the Map.** Guests say them about themselves, and the Map shows them on their own card. The Cloud shows no names at all. (Older posts about other people still keep the author hidden from the display and the public API; only `/hax0r` sees who sent what, for moderation.)
 - **Phones:** joining returns a random token that the phone keeps in `localStorage`; it's how the phone posts fun things and wishes. Resetting the event logs every phone out.
 - **Rendering:** all guest text is rendered as text, never HTML.
 
 ## Offline / internet
 
-Everything works without internet: pages, three.js, fonts (Unbounded, Figtree, Instrument Serif and Caveat, all OFL), the postcode lookup (a bundled table of ~360 districts inside the M25) and the 3D London geometry all ship with the app.
+Everything works without internet for a London party: pages, three.js, fonts (Unbounded, Figtree, Instrument Serif and Caveat, all OFL), the postcode lookup (a bundled table of ~360 districts inside the M25), the 3D London geometry and the list of cities all ship with the app, and other cities' maps are generated in the browser. Only placing guests by neighbourhood (outside London, or by name in London) needs the internet.
 
 The display uses WebGL, so run it on a laptop with a reasonable GPU; any recent Mac is fine.
 
@@ -146,24 +155,28 @@ src/app.js             every route (pages, REST API, admin, backup) and live upd
 src/db.js              SQLite schema/migrations, validation, CRUD, settings, backup (any driver)
 src/node-db.js         node:sqlite driver (one file)
 worker/                Cloudflare: Worker entry + Durable Object, its SQLite driver
-src/postcode.js        postcode → district centroid (+ jitter)
-src/network.js         LAN IP detection
-src/postcode.js        postcode → district centroid (+ jitter)
+src/postcode.js        London postcode → district centroid (+ jitter)
+src/place.js           what a guest typed → their area in the party's city (postcodes or Photon)
 src/network.js         LAN IP detection
 src/auth.js            Basic auth for admin (Web Crypto)
 src/env.js             loads .env
 pages/                 home / hi / hax0r HTML
 public/js/animals.js   the 22 spirit animals + pin colours (shared by browser + server validation)
+public/js/city.js      the party's city: validation, labels, is it London (shared by browser + server)
+public/js/cities.js    city picker: type-ahead over cities.json, "near me"
 public/js/weather.js   fun thing → weather classifier, clusters, forecast (shared by browser + server)
-public/js/3d/          three.js engines: ww-map (paper London), ww-zoo (city life + 2D stickers),
+public/js/3d/          three.js engines: ww-map (paper city), gen-city (districts for any city), ww-zoo (city life + 2D stickers),
                        ww-zoo3d (3D animals), ww-life (visits, waves, weather), ww-cloud (3D clouds)
 public/js/views/       map3d, cloud3d, wishes
-public/data/           london-3d.json: simplified boroughs + Thames in km (npm run build:3d)
+public/data/           london-3d.json: simplified boroughs + Thames in km (npm run build:3d);
+                       cities.json: world cities for the picker (npm run build:cities)
 ```
 
 ### Data sources
 
 - **Postcode district centroids:** [postcodes.io](https://postcodes.io). Contains OS data © Crown copyright and database right, Royal Mail data © Royal Mail copyright and database right, and ONS data © Crown copyright (OGL v3).
+- **Cities:** [GeoNames](https://www.geonames.org) (CC BY 4.0).
+- **Neighbourhood lookup:** [Photon](https://photon.komoot.io) by komoot, with data © OpenStreetMap contributors (ODbL).
 - **Borough boundaries:** ONS Open Geography Portal, Local Authority Districts (May 2024) BGC (OGL v3).
 - **3D London:** borough outlines simplified from the boundaries above; the Thames is a hand-traced centre line.
 - **Fonts:** Unbounded, Figtree, Instrument Serif and Caveat (SIL Open Font License, via Fontsource). See `public/fonts/OFL.txt`.

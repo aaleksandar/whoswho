@@ -53,6 +53,10 @@
         <h2>Display settings</h2>
         <form id="settings-form" class="ad-form">
           <label>Event title <input type="text" name="title" maxlength="60"></label>
+          <div class="ad-city">
+            <label for="city">City <span class="ad-city-row"><input type="text" id="city" name="city" maxlength="80" spellcheck="false"><button type="button" class="ad-btn" id="near" title="Use my location">📍</button></span></label>
+            <small class="ad-dim" id="city-hint">The map the display draws, and where guests' neighbourhoods are looked up.</small>
+          </div>
           <label>Seconds per view <input type="number" name="rotateSeconds" min="3" max="600" step="1"></label>
           <fieldset>
             <legend>Views in rotation</legend>

@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Who's here? A living map of your party</title>
-  <meta name="description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D map of London on the big screen. Free, ready in a minute.">
+  <meta name="description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D paper map of your city on the big screen. Free, ready in a minute.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Who's here? A living map of your party">
-  <meta property="og:description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D map of London on the big screen.">
+  <meta property="og:description" content="Guests scan a QR code, pick a spirit animal and pop up on a 3D paper map of your city on the big screen.">
   <meta property="og:url" content="{{ORIGIN}}/">
   <meta property="og:image" content="{{ORIGIN}}/img/og-card.jpg">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Who's here? Turn your party into a living map of London. A 3D paper London full of cartoon animals, one per guest.">
+  <meta property="og:image:alt" content="Who's here? Turn your party into a living map of your city. A 3D paper city full of cartoon animals, one per guest.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="{{ORIGIN}}/img/og-card.jpg">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦊</text></svg>">
@@ -24,7 +24,7 @@
   <main>
     <section class="ld-hero">
       <p class="ld-kicker">Who's here?</p>
-      <h1>Turn your party into a living map of&nbsp;London.</h1>
+      <h1>Turn your party into a living map of&nbsp;<span id="hero-city">your city</span>.</h1>
       <p class="ld-lede">Guests scan a QR code, pick a spirit animal and pop up on the big screen where they live. Then everyone finds their people.</p>
       <div class="ld-ctas">
         <a class="ld-btn" href="#create">Create your party</a>
@@ -37,7 +37,7 @@
 
     <section class="ld-steps" aria-label="How it works">
       <div><b>1</b><h2>Put it on a screen</h2><p>Open your party's display on a TV or projector.</p></div>
-      <div><b>2</b><h2>Guests scan</h2><p>Name, postcode, spirit animal. Ten seconds, no app.</p></div>
+      <div><b>2</b><h2>Guests scan</h2><p>Name, neighbourhood, spirit animal. Ten seconds, no app.</p></div>
       <div><b>3</b><h2>The room comes alive</h2><p>The zoo map, a cloud of fun facts, and wish lanterns anyone can answer.</p></div>
     </section>
 
@@ -46,6 +46,12 @@
         <h2>Create your party</h2>
         <label for="title">Party name</label>
         <input id="title" name="title" maxlength="60" placeholder="Sam's 30th" autocomplete="off" required>
+        <label for="city">Your city</label>
+        <div class="ld-city">
+          <input id="city" name="city" maxlength="80" placeholder="Start typing: Berlin, Lagos, Austin…" spellcheck="false" required>
+          <button type="button" class="ld-near" id="near" aria-label="Use my location">📍 Near me</button>
+        </div>
+        <p class="ld-hint" id="city-hint" aria-live="polite">Guests pop up on a paper map of it, in their own neighbourhood.</p>
         <label for="slug">Your link</label>
         <div class="ld-slug"><span>whoswho.hypermaps.world/</span><input id="slug" name="slug" maxlength="40" placeholder="sams-30th" autocapitalize="off" autocomplete="off" spellcheck="false" required></div>
         <p class="ld-hint" id="slug-hint" aria-live="polite">Lowercase letters, numbers and dashes.</p>
@@ -66,7 +72,7 @@
   </main>
 
   <footer class="ld-foot">
-    Made for parties in London: guests appear in their postcode district, never at their address. Free.
+    Made for parties anywhere: guests appear in their neighbourhood, never at their address. Free.
   </footer>
 
   <script type="module" src="/js/landing.js"></script>

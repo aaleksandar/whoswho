@@ -5,9 +5,10 @@
 
 import QRCode from 'qrcode/lib/core/qrcode.js';
 import SvgTag from 'qrcode/lib/renderer/svg-tag.js';
-import { publicGuest, ValidationError, AuthError } from './db.js';
+import { publicGuest, cleanGuestInput, ValidationError, AuthError } from './db.js';
 import { checkAdmin, passwordVerifier } from './auth.js';
 import { parsePostcode, lookupOutcode } from './postcode.js';
+import { locate } from './place.js';
 
 const BODY_LIMIT = 32 * 1024;
 
@@ -47,8 +48,9 @@ async function readJson(request) {
  * @param {(req: Request) => object} [o.info] extra fields for /api/info
  * @param {(name: 'home'|'hi'|'hax0r') => Promise<string>} o.page page HTML
  * @param {() => string} [o.title] the party's name, for page titles and link previews
+ * @param {typeof fetch} [o.geocodeFetch] how to reach the geocoder (tests pass a fake)
  */
-export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page, title = () => db.getSettings().title }) {
+export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page, title = () => db.getSettings().title, geocodeFetch }) {
   const verify = adminCheck || passwordVerifier(adminPassword);
   const homePath = (req, base) => (rootPath(req) ? base : `${base}/home`);
   const urls = (req) => {
@@ -61,6 +63,7 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
   const render = async (name, req) =>
     html((await page(name))
       .replaceAll('{{TITLE}}', escapeHtml(title()))
+      .replaceAll('{{CITY}}', escapeHtml(db.getSettings().city.name))
       .replaceAll('{{HOME}}', homePath(req, rootPath(req)))
       .replaceAll('{{HOME_URL}}', urls(req).homeUrl)
       .replaceAll('{{ROOT}}', rootPath(req))
@@ -145,7 +148,10 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
     // ----------------------------------------------------------- public API
     ['GET', '/api/guests', false, () => json(db.listGuests().map(publicGuest))],
     ['POST', '/api/guests', false, async (req) => {
-      const { guest, token } = db.createGuest(await readJson(req));
+      const body = await readJson(req);
+      cleanGuestInput(body); // a missing name fails before any lookup
+      const place = await locate(body.postcode, db.getSettings().city, geocodeFetch);
+      const { guest, token } = db.createGuest(body, place);
       broadcast('guests', { type: 'created', guest: publicGuest(guest) });
       return json({ guest: publicGuest(guest), token }, 201);
     }],
@@ -188,6 +194,14 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
       return json({ valid: true, known: !!hit, outcode: parsed.outcode, area: hit?.area ?? null });
     }],
 
+    // Live hint on the phone: where would this land, in the party's city?
+    ['GET', '/api/place', false, async (_req, _p, url) => {
+      const city = db.getSettings().city;
+      const p = await locate(url.searchParams.get('q') || '', city, geocodeFetch);
+      const pc = p.known && parsePostcode(p.postcode);
+      return json({ known: p.known, area: p.area, outcode: pc && lookupOutcode(pc.outcode) ? pc.outcode : null, city: city.name });
+    }],
+
     ['GET', '/api/info', false, (req) => json({ ...urls(req), ...info(req) })],
 
     ['GET', '/api/qr.svg', false, (req) => {
@@ -200,7 +214,15 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
     ['GET', '/api/admin/guests', true, () => json(db.listGuests())],
     ['PUT', '/api/admin/guests/:id', true, async (req, p) => {
       const id = parseId(p.id);
-      const guest = id && db.updateGuest(id, await readJson(req));
+      const existing = id && db.getGuest(id);
+      if (!existing) return notFound('Guest');
+      const body = await readJson(req);
+      cleanGuestInput(body);
+      // unchanged: keep them where they are (no new lookup, same jitter)
+      const typed = typeof body.postcode === 'string' ? body.postcode.replace(/\s+/g, ' ').trim() : '';
+      const same = typed.toUpperCase() === (existing.postcode || '').toUpperCase() && (existing.lat != null || !typed);
+      const place = same ? 'keep' : await locate(body.postcode, db.getSettings().city, geocodeFetch);
+      const guest = db.updateGuest(id, body, place);
       if (!guest) return notFound('Guest');
       broadcast('guests', { type: 'updated', guest: publicGuest(guest) });
       return json(guest);

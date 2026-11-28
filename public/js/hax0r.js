@@ -5,6 +5,8 @@ import { api, live } from './api.js';
 import { ANIMALS, COLORS, PALETTE, animalLabel } from './animals.js';
 import { VIBES } from './weather.js';
 import { sticker } from './sticker.js';
+import { cityPicker } from './cities.js';
+import { cityLabel } from './city.js';
 
 let guests = [];
 let secrets = [];
@@ -106,7 +108,7 @@ function edit(g) {
   h('div.ad-row',
     h('label', 'Animal', select('animal', ANIMALS, g.avatar.animal, animalLabel)),
     h('label', 'Colour', select('color', COLORS, g.avatar.color, (c) => c))),
-  h('label', 'Postcode', h('input', { type: 'text', name: 'postcode', maxlength: 10, value: g.postcode || '' })),
+  h('label', 'Neighbourhood or postcode', h('input', { type: 'text', name: 'postcode', maxlength: 60, value: g.postcode || '' })),
   wishList(g),
   h('div.ad-form-foot',
     h('button.ad-btn.primary', { type: 'submit' }, 'Save changes'),
@@ -188,10 +190,14 @@ $('#filter').addEventListener('input', renderGuests);
 
 // ---------------------------------------------------------------- settings
 const sf = $('#settings-form');
+const city = cityPicker($('#city'), { nearBtn: $('#near'), hint: $('#city-hint'), auto: false });
+let savedCity = null;
 
 function fillSettings(s) {
   sf.title.value = s.title;
   sf.rotateSeconds.value = s.rotateSeconds;
+  if (document.activeElement !== sf.city) city.set(s.city);
+  savedCity = s.city;
   for (const cb of sf.querySelectorAll('input[name=views]')) cb.checked = s.views.includes(cb.value);
 }
 
@@ -204,8 +210,13 @@ function flash(el, msg, ok = true) {
 
 sf.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const picked = city.get();
+  if (!picked && sf.city.value.trim() !== cityLabel(savedCity)) {
+    return flash($('#settings-status'), 'Pick a city from the list', false);
+  }
   try {
     const s = await api('PUT', '/api/settings', {
+      city: picked || savedCity,
       title: sf.title.value,
       rotateSeconds: Number(sf.rotateSeconds.value),
       views: [...sf.querySelectorAll('input[name=views]:checked')].map((cb) => cb.value),

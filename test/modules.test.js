@@ -155,3 +155,45 @@ test('lanAddresses prefers private Wi-Fi/Ethernet over VPN and link-local', () =
   assert.equal(list[0].address, '192.168.1.23');
   assert.ok(!list.some((a) => a.address.startsWith('169.254')));
 });
+
+test('cities: validation, labels and which one is London', async () => {
+  const { cleanCity, cityLabel, isLondon, DEFAULT_CITY } = await import('../public/js/city.js');
+  assert.equal(cleanCity({ name: 'Berlin' }), null);
+  assert.equal(cleanCity({ name: '', lat: 1, lng: 1 }), null);
+  assert.deepEqual(cleanCity({ name: ' Austin ', region: 'Texas', country: 'United States', cc: 'us', lat: 30.26715, lng: -97.74306 }),
+    { name: 'Austin', region: 'Texas', country: 'United States', cc: 'US', lat: 30.2672, lng: -97.7431 });
+  assert.equal(cityLabel({ name: 'Springfield', region: 'Illinois', country: 'United States' }), 'Springfield, Illinois, United States');
+  assert.equal(cityLabel({ name: 'Berlin', region: 'Berlin', country: 'Germany' }), 'Berlin, Germany');
+  assert.ok(isLondon(DEFAULT_CITY));
+  assert.ok(isLondon({ name: 'Croydon', cc: 'GB', lat: 51.38, lng: -0.1 }));
+  assert.ok(!isLondon({ name: 'Brighton', cc: 'GB', lat: 50.83, lng: -0.14 }));
+  assert.ok(!isLondon({ name: 'London', cc: 'CA', lat: 42.98, lng: -81.25 }), 'London, Ontario');
+});
+
+test('a generated city: stable, closed districts around the centre', async () => {
+  const { genCity } = await import('../public/js/3d/gen-city.js');
+  const a = genCity({ name: 'Lagos', lat: 6.45, lng: 3.39 });
+  assert.deepEqual(a, genCity({ name: 'Lagos', lat: 6.45, lng: 3.39 }));
+  assert.notDeepEqual(a.boroughs, genCity({ name: 'Austin', lat: 30.27, lng: -97.74 }).boroughs);
+  assert.equal(a.thames, null);
+  assert.ok(a.boroughs.length >= 20, `${a.boroughs.length} districts`);
+  const area = (r) => r.reduce((n, p, i) => n + (i ? r[i - 1][0] * p[1] - p[0] * r[i - 1][1] : 0), 0) / 2;
+  for (const b of a.boroughs) {
+    const r = b.r[0];
+    assert.deepEqual(r[0], r.at(-1), 'closed');
+    assert.ok(area(r) > 0.5, 'counter-clockwise, not a sliver');
+    assert.ok(r.every((p) => Math.hypot(p[0], p[1]) < 23));
+  }
+  // the middle of town is always there
+  const inside = (r, x, y) => r.reduce((c, p, i) => { const q = r[(i || r.length) - 1]; return (p[1] > y) !== (q[1] > y) && x < ((q[0] - p[0]) * (y - p[1])) / (q[1] - p[1]) + p[0] ? !c : c; }, false);
+  assert.ok(a.boroughs.some((b) => inside(b.r[0], 0, 0)));
+});
+
+test('projector centres a city on itself, London on Charing Cross', async () => {
+  const { projector, project } = await import('../public/js/geo.js');
+  const berlin = projector({ name: 'Berlin', cc: 'DE', lat: 52.52, lng: 13.405 });
+  assert.deepEqual(berlin(52.52, 13.405), [0, 0]);
+  const [x, y] = berlin(52.52 + 0.1, 13.405 + 0.1);
+  assert.ok(Math.abs(y - 11.06) < 0.1 && Math.abs(x - 6.78) < 0.1, `${x},${y}`);
+  assert.deepEqual(projector({ name: 'London', cc: 'GB', lat: 51.509, lng: -0.126 })(51.5, -0.1), project(51.5, -0.1));
+});

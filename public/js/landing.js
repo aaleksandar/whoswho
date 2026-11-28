@@ -1,5 +1,7 @@
 // Landing page: create a party at whoswho.hypermaps.world/<slug>.
 
+import { cityPicker } from './cities.js';
+
 const $ = (s) => document.querySelector(s);
 const form = $('#create-form');
 const title = $('#title');
@@ -9,6 +11,15 @@ const err = $('#err');
 const go = $('#go');
 
 const HINT = 'Lowercase letters, numbers and dashes.';
+
+// The city: typed (from the bundled list), or found from this browser's
+// location. If the page may already use it, the nearest city is filled in.
+const heroCity = $('#hero-city');
+const city = cityPicker($('#city'), {
+  nearBtn: $('#near'),
+  hint: $('#city-hint'),
+  onChange: (c) => { heroCity.textContent = c ? c.name : 'your city'; },
+});
 let slugTouched = false;
 
 const toSlug = (s) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
@@ -73,8 +84,9 @@ function linkRow(label, url, note) {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   err.textContent = '';
-  const body = { title: title.value.trim(), slug: slug.value.replace(/^-+|-+$/g, ''), password: $('#password').value };
+  const body = { title: title.value.trim(), city: city.get(), slug: slug.value.replace(/^-+|-+$/g, ''), password: $('#password').value };
   if (!body.title) { err.textContent = 'Give your party a name.'; return title.focus(); }
+  if (!body.city) { err.textContent = 'Pick your city from the list (or tap “Near me”).'; return $('#city').focus(); }
   if (!body.slug) { err.textContent = 'Choose your link.'; return slug.focus(); }
   if (body.password.length < 6) { err.textContent = 'The admin password needs at least 6 characters.'; return $('#password').focus(); }
   go.disabled = true;
@@ -96,6 +108,7 @@ form.addEventListener('submit', async (e) => {
   } catch (ex) {
     err.textContent = ex.message;
     if (ex.field === 'slug') { slug.focus(); check(); }
+    if (ex.field === 'city') $('#city').focus();
     go.disabled = false;
     go.textContent = 'Create party';
   }

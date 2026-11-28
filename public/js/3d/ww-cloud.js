@@ -22,7 +22,7 @@
     sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 90 }); sun.shadow.bias = -0.0005; sun.shadow.radius = 4;
     scene.add(sun);
 
-    // paper London far below, catching cloud shadows
+    // the paper city far below, catching cloud shadows
     if (o.boroughs) {
       var pal = ['#F2D3A8', '#EDB9A0', '#BFDCB0', '#B5CDE8', '#EFCB7E', '#D9B6DC', '#F5C7A3'];
       var below = new T.Group(); below.position.set(0, -9, -6); below.scale.setScalar(0.9);
