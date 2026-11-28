@@ -520,7 +520,21 @@
     var walking = false, homing = false;
     var self = {
       i: i, pick: [a.root, tok], home: new T.Vector3(at.x, at.y, at.z),
-      remove: function () { ctx.scene.remove(grp); },
+      // Taking it out of the scene isn't enough: three.js keeps each geometry's
+      // buffers and each material's compiled program on the GPU until they're
+      // disposed. Everything here belongs to this marker except the shared
+      // sphere (Z3._sg) and the env map (ctx.env; material.dispose() leaves
+      // textures alone), so free the rest.
+      remove: function () {
+        ctx.scene.remove(grp);
+        var geos = new Set(), mats = new Set();
+        grp.traverse(function (o) {
+          if (o.geometry && o.geometry !== Z3._sg) geos.add(o.geometry);
+          [].concat(o.material || []).forEach(function (m) { mats.add(m); });
+        });
+        geos.forEach(function (g) { g.dispose(); });
+        mats.forEach(function (m) { m.dispose(); });
+      },
       /** Where the animal is now, on the ground (world coordinates). */
       pos: function (v) { return v.set(at.x + off.x, at.y + gy, at.z + off.z); },
       idle: function () { return !goal && !act && off.lengthSq() < 0.01; },
