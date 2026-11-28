@@ -39,12 +39,43 @@ const mod = (n, m) => ((n % m) + m) % m;
 const available = () => settings.views.filter((id) => views[id]?.hasData(state));
 
 // ------------------------------------------------------------------ stage
+// The layout viewport, not window.innerWidth: on iOS Safari that's the
+// visible area, which changes while the page is pinch-zoomed, and re-scaling
+// the whole stage on every frame of a pinch ran the phone out of memory.
+const viewport = () => [document.documentElement.clientWidth || window.innerWidth, document.documentElement.clientHeight || window.innerHeight];
+let k = 1;
 function fit() {
-  const k = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  const [w, h] = viewport();
+  k = Math.min(w / 1920, h / 1080);
   stage.style.setProperty('--k', k.toFixed(4));
+  rescale();
+}
+
+// Draw the 3D views at about the size they're shown: a phone shows the
+// 1920×1080 stage a fifth of its width, so 2880×1620 pixels (the old fixed
+// 1.5×) were mostly wasted memory. A TV still gets up to 1.5×.
+// A phone (even held sideways) has far less memory for a page than a laptop
+// driving a TV: at most 1×, and only the view on screen's 3D scene kept warm.
+const PHONE = Math.min(window.screen?.width || 1920, window.screen?.height || 1080) < 600;
+const renderScale = () => Math.round(Math.min(PHONE ? 1 : 1.5, Math.max(0.5, k * (window.devicePixelRatio || 1))) * 20) / 20;
+const small = () => PHONE || renderScale() < 1;
+let scaleT;
+let drawnAt = 0;
+function rescale() {
+  clearTimeout(scaleT);
+  scaleT = setTimeout(() => {
+    const s = renderScale();
+    if (!drawnAt || Math.abs(s - drawnAt) / drawnAt < 0.15) return;
+    drawnAt = s;
+    for (const v of Object.values(views)) v.setScale?.(s);
+  }, 300);
 }
 window.addEventListener('resize', fit);
 fit();
+
+// Two-finger gestures belong to the display (zoom the map, not the page). CSS
+// touch-action covers modern Safari; older iOS only listens to this.
+for (const e of ['gesturestart', 'gesturechange']) document.addEventListener(e, (ev) => ev.preventDefault(), { passive: false });
 
 // --------------------------------------------------------------- rotation
 function nextId(dir) {
@@ -270,15 +301,18 @@ async function boot() {
     geo = isLondon(city) ? await fetch('/data/london-3d.json').then((r) => r.json()) : genCity(city);
     builtFor = city;
     views = {
-      map: createMapView(sections.map, { geo, city, onInteract: () => restartTimer('map') }),
-      cloud: createCloudView(sections.cloud, { geo, onInteract: () => restartTimer('cloud') }),
+      map: createMapView(sections.map, { geo, city, scale: renderScale, lowMemory: small, onInteract: () => restartTimer('map') }),
+      cloud: createCloudView(sections.cloud, { geo, scale: renderScale, onInteract: () => restartTimer('cloud') }),
       wishes: createWishesView(sections.wishes, { onInteract: () => restartTimer('wishes') }),
     };
     await resync();
     // Warm up both 3D scenes now, so the first jump to a new guest or
     // secret is instant instead of waiting for shaders to compile.
+    // (On a phone, the Cloud waits until it's shown: two 3D scenes at once is
+    // more memory than iOS Safari gives a page.)
+    drawnAt = renderScale();
     views.map.prepare();
-    views.cloud.prepare();
+    if (!small()) views.cloud.prepare();
   } catch (err) {
     console.error(err);
     views = {};

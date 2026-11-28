@@ -3,6 +3,9 @@
 
 body.home {
   height: 100vh;
+  /* the display's gestures, not the browser's: a pinch anywhere on the page
+     (also beside the stage, on a phone) must not zoom the page */
+  touch-action: none;
   overflow: hidden;
   background: #EAD7BA;
   color: var(--ink);

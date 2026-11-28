@@ -5,7 +5,8 @@
   window.WWMap = function (canvas, o) {
     var T = window.THREE, W = { boroughs: o.boroughs, thames: o.thames }, th = o.theme;
     var r = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    // o.pixelRatio: how sharp to draw the 1920×1080 stage (less on a phone, where it's shown small)
+    r.setPixelRatio(o.pixelRatio || Math.min(window.devicePixelRatio || 1, 1.5));
     r.setSize(1920, 1080, false);
     r.shadowMap.enabled = th.shadows !== false;
     r.shadowMap.type = T.PCFSoftShadowMap;
@@ -301,6 +302,7 @@
       setGuests: setGuests,
       touched: function () { return touched; },
       zoomBy: function (f) { zoomBy(f); },
+      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(1920, 1080, false); },
       // Only the view on screen renders; the others sleep.
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },

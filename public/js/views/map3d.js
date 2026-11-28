@@ -82,7 +82,7 @@ function spread(gs) {
 // /home?weather=snow holds one kind of weather (handy for trying them out)
 const PINNED = new URLSearchParams(location.search).get('weather');
 
-export function createMapView(root, { geo, city = DEFAULT_CITY, onInteract }) {
+export function createMapView(root, { geo, city = DEFAULT_CITY, scale, lowMemory, onInteract }) {
   const london = isLondon(city);
   const project = projector(city);
   const centre = london ? DEFAULT_CITY : city; // paper London is centred on Charing Cross
@@ -184,7 +184,8 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, onInteract }) {
         borMat: (T, c) => new T.MeshLambertMaterial({ color: new T.Color(c) }),
         edge: 0xFFFFFF, edgeOp: 1,
         riverMat: (T) => new T.MeshLambertMaterial({ color: 0x86B8EA, side: T.DoubleSide }), riverW: 0.32,
-        shadowBounds: 24, shadowSize: 4096,
+        // a phone shows the map small: a 4096² shadow map is 64 MB it can't spare
+        shadowBounds: 24, shadowSize: lowMemory?.() ? 2048 : 4096,
         hemi: [0xFFF4E4, 0xB89A74, 0.5], sun: [0xFFF1DD, 0.72],
       },
       cam: { wide: { r: 23, phi: 0.82, tx: london ? 1.0 : 0, tz: london ? -0.8 : 0 }, focus: { r: 14, phi: 0.9, side: 3.2, lift: 0.5 } },
@@ -202,6 +203,7 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, onInteract }) {
       pins: () => pinEls,
       lead: () => lead,
       cardAt: [1010, 300],
+      pixelRatio: scale?.(),
     });
     syncMarkers();
   }
@@ -281,6 +283,8 @@ export function createMapView(root, { geo, city = DEFAULT_CITY, onInteract }) {
       boot();
       setTimeout(() => { if (!visible) map?.pause(); }, 3000);
     },
+
+    setScale(p) { map?.setPixelRatio(p); },
 
     show() {
       visible = true;

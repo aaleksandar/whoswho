@@ -10,7 +10,7 @@ const FOCUS_MS = 9000; // each fun thing's turn at the front
 const HOLD_MS = 15000; // after someone taps a cloud, or a new one arrives
 const FLIP_PX = 170; // drag the card this far (stage px), or fling it, to flip
 
-export function createCloudView(root, { geo, onInteract }) {
+export function createCloudView(root, { geo, scale, onInteract }) {
   const canvas = h('canvas', { width: 1920, height: 1080, 'aria-label': '3D sky of clouds, one per fun thing guests said, each with weather that matches its words' });
   const toast = h('div.cw-toast.off', { role: 'status' });
   const spotQ = h('q');
@@ -46,6 +46,7 @@ export function createCloudView(root, { geo, onInteract }) {
       groups,
       boroughs: geo.boroughs,
       getSpot: () => spotId,
+      pixelRatio: scale?.(),
     });
     render();
     engine.snap();
@@ -219,6 +220,8 @@ export function createCloudView(root, { geo, onInteract }) {
       boot();
       setTimeout(() => { if (!visible) engine?.pause(); }, 3000);
     },
+
+    setScale(p) { engine?.setPixelRatio(p); },
 
     show() {
       visible = true;

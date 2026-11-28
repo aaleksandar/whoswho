@@ -12,7 +12,7 @@
   C.create = function (canvas, o) {
     var T = window.THREE, VIBES = o.vibes;
     var r = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); r.setSize(1920, 1080, false);
+    r.setPixelRatio(o.pixelRatio || Math.min(window.devicePixelRatio || 1, 1.5)); r.setSize(1920, 1080, false);
     r.shadowMap.enabled = true; r.shadowMap.type = T.PCFSoftShadowMap;
     var scene = new T.Scene(); scene.fog = new T.Fog(0xF4F2FB, 30, 80);
     var cam = new T.PerspectiveCamera(40, 1920 / 1080, 0.5, 300);
@@ -202,6 +202,7 @@
       // jump: start there now (a flipped-in cloud slides in from that side)
       setNudge: function (px, hold, jump) { nudge = px; held = !!hold; if (hold || jump) nudgeNow = px; },
       snap: function () { Object.keys(objs).forEach(function (id) { objs[id].pos.copy(objs[id].target); objs[id].s = objs[id].ts; }); skyNow.copy(skyWant); },
+      setPixelRatio: function (p) { r.setPixelRatio(p); r.setSize(1920, 1080, false); },
       pause: function () { running = false; cancelAnimationFrame(raf); },
       resume: function () { if (running) return; running = true; last = performance.now(); raf = requestAnimationFrame(loop); },
       dispose: function () { running = false; cancelAnimationFrame(raf); r.dispose(); if (r.forceContextLoss) r.forceContextLoss(); }
