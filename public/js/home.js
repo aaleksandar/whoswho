@@ -155,9 +155,19 @@ async function loadAll() {
   pushState();
 }
 
+// Fetch first, then merge into whatever the state is *now*. Writing
+// `state = { ...state, x: await … }` spreads the state from before the await,
+// so when events arrive together (deleting a guest sends guests + secrets +
+// wishes) a slower handler wrote the old guest list back and the deleted guest
+// stayed on screen.
+async function refresh(key) {
+  const data = await api('GET', `/api/${key}`);
+  state = { ...state, [key]: data };
+}
+
 async function onGuests(e) {
-  state = { ...state, guests: await api('GET', '/api/guests') };
-  if (e?.type === 'deleted' || e?.type === 'reset') state.secrets = await api('GET', '/api/secrets');
+  await refresh('guests');
+  if (e?.type === 'deleted' || e?.type === 'reset') await refresh('secrets');
   pushState();
   const g = e?.guest;
   if (!g) return;
@@ -168,7 +178,7 @@ async function onGuests(e) {
 }
 
 async function onWishes(e) {
-  state = { ...state, wishes: await api('GET', '/api/wishes') };
+  await refresh('wishes');
   pushState();
   if (e?.type !== 'created') return;
   if (jumpTo('wishes') || current === 'wishes') views.wishes.highlight(e.wish.id);
@@ -176,16 +186,16 @@ async function onWishes(e) {
 }
 
 async function onSecrets(e) {
-  state = { ...state, secrets: await api('GET', '/api/secrets') };
+  await refresh('secrets');
   pushState();
   if (e?.type !== 'created') return;
   // Something fun about someone: fly to their card on the map, so the room
   // sees who said it. (Anyone not on the map gets the Cloud's spotlight.)
   let who = state.guests.find((g) => g.id === e.secret.aboutId);
   if (!who) { // they may have joined a moment ago, ahead of our guest list
-    state = { ...state, guests: await api('GET', '/api/guests') };
+    await refresh('guests');
     pushState();
-    who = state.guests.find((g) => g.id === e.secret.aboutId);
+    who =state.guests.find((g) => g.id === e.secret.aboutId);
   }
   if (who?.lat != null && settings.views.includes('map') && (jumpTo('map') || current === 'map')) views.map.highlight(who.id);
   else if (jumpTo('cloud') || current === 'cloud') views.cloud.highlight(e.secret);
