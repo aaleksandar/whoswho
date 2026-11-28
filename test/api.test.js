@@ -44,6 +44,17 @@ describe('API (open admin)', () => {
     for (const f of ['ww-map.js', 'ww-zoo.js', 'ww-zoo3d.js', 'ww-cloud.js']) assert.equal((await s.call('GET', `/js/3d/${f}`)).status, 200, f);
   });
 
+  test('link previews show the 3D zoo, with this server\'s address', async () => {
+    const hi = await s.call('GET', '/hi', undefined, { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'party.trycloudflare.com' });
+    assert.match(hi.text, /<meta property="og:image" content="https:\/\/party\.trycloudflare\.com\/img\/og-zoo\.jpg">/);
+    assert.ok(!hi.text.includes('{{'), 'no placeholders left');
+    const home = await s.call('GET', '/home');
+    assert.match(home.text, /og:image" content="http:\/\/[^"]+\/img\/og-zoo\.jpg"/);
+    const img = await s.call('GET', '/img/og-zoo.jpg');
+    assert.equal(img.status, 200);
+    assert.equal(img.headers.get('content-type'), 'image/jpeg');
+  });
+
   test('join: a guest gets a token; public list shows the district, not the postcode', async () => {
     const r = await s.call('POST', '/api/guests', {
       name: '  Robin  ', avatar: { animal: 'koala', color: 'mint', hat: 'evil' }, need: 'a climbing buddy', postcode: 'e8 3pb',

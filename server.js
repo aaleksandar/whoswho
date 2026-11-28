@@ -5,6 +5,7 @@
 
 import express from 'express';
 import QRCode from 'qrcode';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { openDb, publicGuest, ValidationError, AuthError } from './src/db.js';
@@ -90,8 +91,15 @@ export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSW
 
   // ------------------------------------------------------------------ pages
   app.get('/', (_req, res) => res.redirect('/home'));
-  app.get('/home', (_req, res) => res.sendFile(page('home')));
-  app.get('/hi', (_req, res) => res.sendFile(page('hi')));
+  // Link previews (og:image) need absolute URLs: fill in this server's address.
+  const sendPage = (name) => (req, res, next) => {
+    fs.readFile(page(name), 'utf8', (err, html) => {
+      if (err) return next(err);
+      res.type('html').send(html.replaceAll('{{BASE}}', urls(req).base));
+    });
+  };
+  app.get('/home', sendPage('home'));
+  app.get('/hi', sendPage('hi'));
   app.get('/hax0r', admin, (_req, res) => res.sendFile(page('hax0r')));
 
   app.use(express.static(path.join(ROOT, 'public'), { index: false }));
