@@ -2,7 +2,7 @@
 
 import { h, debounce } from './dom.js';
 import { api } from './api.js';
-import { AVATAR_DIMENSIONS, avatarDataUri, randomAvatar, normalizeAvatar } from './avatar.js';
+import { AVATAR_DIMENSIONS, renderAvatar, randomAvatar, normalizeAvatar } from './avatar.js';
 import { normalizeVibe, MAX_VIBE_LEN } from './vibes.js';
 import {
   LIMITS, LEAD, CHAPTERS, NEEDS, OFFERS, INTERESTS, MUSIC, FOOD, BRING_VIBES, AREAS,
@@ -140,7 +140,21 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
   ]);
 
   // ------------------------------------------------------------- spirit animal
-  const preview = h('img.avatar-img.gf-preview', { alt: 'Your spirit animal', width: 168, height: 168 });
+  // Avatars here are drawn as inline SVG, not <img src="data:image/svg+xml…">.
+  // Every tap re-draws ~28 option thumbnails with a new spec; as <img>s that is
+  // ~28 brand-new SVG images per tap, and WebKit keeps each one alive as its own
+  // document in its image cache. A minute of playing with the picker on iOS
+  // Safari piled up hundreds of them and the tab got killed for memory.
+  // Inline SVG is plain DOM that's freed as soon as it's replaced.
+  const preview = h('div.avatar-img.gf-preview', { role: 'img', 'aria-label': 'Your spirit animal' });
+  const drawn = new WeakMap(); // el -> key of what it currently shows
+  const draw = (el, spec, size) => {
+    const key = JSON.stringify(normalizeAvatar(spec));
+    if (drawn.get(el) === key) return;
+    drawn.set(el, key);
+    el.innerHTML = renderAvatar(spec, size); // our own markup, no guest text
+    el.firstElementChild?.setAttribute('aria-hidden', 'true');
+  };
   const dimRows = new Map();
   const dimBlocks = AVATAR_DIMENSIONS.map((dim) => {
     const buttons = new Map();
@@ -157,7 +171,7 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
         : h('button.gf-opt', {
           type: 'button', role: 'radio', 'aria-label': opt.label,
           onclick: () => setAvatar({ [dim.key]: opt.id }),
-        }, h('img.avatar-img', { alt: '', width: 56, height: 56 }), h('span', opt.label));
+        }, h('div.avatar-img.gf-thumb', { 'aria-hidden': 'true' }), h('span', opt.label));
       buttons.set(opt.id, btn);
       row.append(btn);
     }
@@ -166,13 +180,13 @@ export function mountGuestForm(root, { initial = null, submitLabel = 'Put me on 
   });
 
   function renderAvatarUi(scrollSelected = false) {
-    preview.src = avatarDataUri(state.avatar);
+    draw(preview, state.avatar, 168);
     for (const { row, buttons, dim } of dimRows.values()) {
       for (const [id, btn] of buttons) {
         const on = state.avatar[dim.key] === id;
         btn.setAttribute('aria-checked', String(on));
         btn.classList.toggle('on', on);
-        if (dim.type !== 'swatch') btn.querySelector('img').src = avatarDataUri({ ...state.avatar, [dim.key]: id });
+        if (dim.type !== 'swatch') draw(btn.firstElementChild, { ...state.avatar, [dim.key]: id }, 56);
         if (on && scrollSelected && dim.type !== 'animal') {
           row.scrollLeft = btn.offsetLeft - row.clientWidth / 2 + btn.clientWidth / 2;
         }

@@ -103,6 +103,12 @@
   box-shadow: 5px 5px 0 var(--ink);
   background: #fff;
 }
+.gf-preview svg,
+.gf-thumb svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .gf-preview.spin {
   animation: gf-spin 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
@@ -168,7 +174,7 @@
   scroll-snap-align: center;
   transition: border-color 0.12s, transform 0.12s;
 }
-.gf-opt img {
+.gf-thumb {
   width: 56px;
   height: 56px;
 }
@@ -190,7 +196,7 @@
   padding: 5px 2px;
   font-size: 0.68rem;
 }
-.gf-animal-grid .gf-opt img {
+.gf-animal-grid .gf-thumb {
   width: 100%;
   max-width: 56px;
   height: auto;
