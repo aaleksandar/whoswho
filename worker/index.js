@@ -11,7 +11,7 @@
 // are shared, served by Workers Static Assets before this code runs.
 
 import { DurableObject } from 'cloudflare:workers';
-import { createStore } from '../src/db.js';
+import { createStore, DEFAULT_SETTINGS } from '../src/db.js';
 import { createHandler } from '../src/app.js';
 import { hashPassword, hashVerifier } from '../src/auth.js';
 import { durableDriver } from './sqlite-driver.js';
@@ -71,6 +71,11 @@ export class Party extends DurableObject {
       rootPath: () => `/${this.meta.slug}`,
       info: (req) => ({ host: new URL(req.url).host, port: null, slug: this.meta.slug }),
       page: async (name) => PAGES[name],
+      // the display's title if the host renamed it in /hax0r, else the name it was created with
+      title: () => {
+        const t = this.db.getSettings().title;
+        return t && t !== DEFAULT_SETTINGS.title ? t : this.meta.title;
+      },
     });
   }
 

@@ -18,6 +18,9 @@ class HttpError extends Error {
   }
 }
 
+// Party names are typed by people: escape them before they go into a page.
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
 const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...headers } });
 
@@ -43,8 +46,9 @@ async function readJson(request) {
  * @param {(req: Request) => string} [o.rootPath] where this party lives on it ('' or '/my-party')
  * @param {(req: Request) => object} [o.info] extra fields for /api/info
  * @param {(name: 'home'|'hi'|'hax0r') => Promise<string>} o.page page HTML
+ * @param {() => string} [o.title] the party's name, for page titles and link previews
  */
-export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page }) {
+export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath = () => '', info = () => ({}), page, title = () => db.getSettings().title }) {
   const verify = adminCheck || passwordVerifier(adminPassword);
   const homePath = (req, base) => (rootPath(req) ? base : `${base}/home`);
   const urls = (req) => {
@@ -56,6 +60,7 @@ export function createHandler({ db, adminPassword, adminCheck, baseUrl, rootPath
   // address, {{ORIGIN}} for shared files (link previews need absolute URLs).
   const render = async (name, req) =>
     html((await page(name))
+      .replaceAll('{{TITLE}}', escapeHtml(title()))
       .replaceAll('{{HOME}}', homePath(req, rootPath(req)))
       .replaceAll('{{HOME_URL}}', urls(req).homeUrl)
       .replaceAll('{{ROOT}}', rootPath(req))

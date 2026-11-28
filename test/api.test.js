@@ -50,6 +50,12 @@ describe('API (open admin)', () => {
     assert.ok(!hi.text.includes('{{'), 'no placeholders left');
     const home = await s.call('GET', '/home');
     assert.match(home.text, /og:image" content="http:\/\/[^"]+\/img\/og-zoo\.jpg"/);
+    // the party's name is the preview's title, escaped
+    await s.call('PUT', '/api/settings', { title: 'Sam & Jo\'s <30th>' });
+    const named = await s.call('GET', '/home');
+    assert.match(named.text, /<meta property="og:title" content="Sam &amp; Jo&#39;s &lt;30th&gt;">/);
+    assert.match((await s.call('GET', '/hi')).text, /<title>Join Sam &amp; Jo&#39;s &lt;30th&gt;<\/title>/);
+    await s.call('PUT', '/api/settings', { title: '' });
     const img = await s.call('GET', '/img/og-zoo.jpg');
     assert.equal(img.status, 200);
     assert.equal(img.headers.get('content-type'), 'image/jpeg');
